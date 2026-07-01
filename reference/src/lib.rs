@@ -4,6 +4,8 @@
 //! `rust-fn-dsa` (standard SHAKE256) and emit JSON test vectors consumed by the
 //! Cairo tests: mod-q arithmetic, NTT, hash-to-point, and end-to-end verify.
 
+pub mod falcon_codec;
+
 /// Falcon-512 parameters.
 pub const N: usize = 512;
 pub const Q: u32 = 12289;

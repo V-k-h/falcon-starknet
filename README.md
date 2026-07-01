@@ -29,7 +29,7 @@ benches/           per-component steps/gas harness   (todo)
 | M1 | `zq` mod-12289 arithmetic (→ BoundedInt) | seed ✅ |
 | M2 | Unrolled NTT via `codegen`, diff-tested vs reference | ✅ fast O(n·log n) NTT with lazy reduction; **n=512 compiles & passes snforge** (57K steps / ~17.2M gas), diff-tested vs Rust reference |
 | M3 | SHAKE256 ✅ + hash-to-point (rejection sampling) | ✅ KAT-verified; measured 3.73M steps / ~534M gas |
-| M4 | hint-based `verify()` core + norm bound | ✅ core (hint-check + norm) validated end-to-end at n=4 (accept + 2 reject paths). Real fn-dsa sig/pubkey byte decoding + FN-DSA hash framing = M4-decode (next); n=512 gated on M2-opt |
+| M4 | hint-based `verify()` + decoders | ✅ verify core (hint-check + norm) at n=4; ✅ pubkey & signature byte decoders round-trip-validated on real fn-dsa output (h, s2 extracted). Remaining: FN-DSA hash framing + wire verify_hint_512 for full real-signature e2e |
 | M5 | benchmark harness (SHAKE vs Poseidon backends) | todo |
 
 ## Run

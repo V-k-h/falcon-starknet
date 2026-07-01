@@ -46,6 +46,18 @@ fn main() {
     let ok = vk.verify(&sig, &DOMAIN_NONE, &HASH_ID_RAW, message);
     assert!(ok, "reference signature must verify");
 
+    // ---- M4-decode: our byte codecs, validated by round-trip on real fn-dsa bytes ----
+    use falcon_reference::falcon_codec::{decode_pubkey, decode_signature, encode_pubkey, encode_signature};
+    let h = decode_pubkey(&vrfy_key);
+    assert_eq!(encode_pubkey(&h), vrfy_key.to_vec(), "pubkey round-trip");
+    assert!(h.iter().all(|&c| c < 12289), "h coeffs in [0,q)");
+
+    let (nonce, s2) = decode_signature(&sig);
+    assert_eq!(encode_signature(&nonce, &s2), sig, "signature round-trip");
+    let max_s2 = s2.iter().map(|c| c.unsigned_abs()).max().unwrap();
+    assert!(max_s2 < 2048, "s2 coeffs are short (Falcon Gaussian)");
+    eprintln!("[gen-vectors] codec OK: h[0..3]={:?}, s2[0..3]={:?}, max|s2|={}", &h[0..3], &s2[0..3], max_s2);
+
     let kat = VerifyKat {
         scheme: "Falcon-512 / FN-DSA (SHAKE256, DOMAIN_NONE, HASH_ID_RAW)".to_string(),
         logn: 9,
