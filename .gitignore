@@ -1,0 +1,7 @@
+# Rust
+/target
+# Cairo / Scarb / Starknet Foundry
+**/target/
+.snfoundry_cache/
+# misc
+.DS_Store

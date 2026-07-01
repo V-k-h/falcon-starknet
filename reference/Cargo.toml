@@ -1,0 +1,10 @@
+[package]
+name = "falcon-reference"
+version = "0.1.0"
+edition = "2021"
+
+# TODO (M1/M4): add Thomas Pornin's FN-DSA crates as the authoritative reference
+# and KAT / test-vector generator (public domain, standard SHAKE256):
+#   fn-dsa = "..."   (or fn-dsa-kgen / fn-dsa-sign / fn-dsa-vrfy)
+# This crate will emit JSON vectors into packages/falcon/tests/data/.
+[dependencies]
