@@ -23,6 +23,24 @@ fn powmod(mut base: i128, mut exp: i128, m: i128) -> i128 {
     r
 }
 
+/// Negacyclic product a·b mod (x^n + 1), reduced mod q. Public for the reference.
+pub fn negacyclic_mul(a: &[i128], b: &[i128]) -> Vec<i128> {
+    let n = a.len();
+    let mut c = vec![0i128; n];
+    for i in 0..n {
+        for j in 0..n {
+            let k = i + j;
+            let p = a[i] * b[j];
+            if k < n {
+                c[k] = ((c[k] + p) % Q + Q) % Q;
+            } else {
+                c[k - n] = ((c[k - n] - p) % Q + Q) % Q;
+            }
+        }
+    }
+    c
+}
+
 /// A primitive 2n-th root of unity mod q (psi), so psi^(2n)=1, psi^n=-1.
 /// q-1 = 12288 = 2^12 * 3, so any power of two up to 2^12 divides it.
 pub fn psi_2n(n: i128) -> i128 {

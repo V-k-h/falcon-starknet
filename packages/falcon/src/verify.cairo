@@ -11,6 +11,7 @@
 //! vector. Same logic at n=512 once the NTT-512 snforge/Sierra-cost limit is
 //! resolved (M2-opt); decoding real fn-dsa signature/pubkey bytes is M4-decode.
 
+use crate::ntt512::ntt_512;
 use crate::ntt_generated::ntt_4;
 
 const Q: u64 = 12289;
@@ -33,18 +34,19 @@ fn center_sq(x: u64) -> u64 {
     c * c
 }
 
-/// Verify a hint-based Falcon proof for n=4. Returns true iff accepted.
-pub fn verify_hint_4(
+/// Core check given a = NTT(s2), b = NTT(mul_hint) (transform size = n).
+pub fn verify_core(
     s2: Span<felt252>,
     pk_ntt: Span<felt252>,
     mul_hint: Span<felt252>,
     msg_point: Span<felt252>,
+    a: Span<felt252>,
+    b: Span<felt252>,
+    n: u32,
 ) -> bool {
     // (1) hint consistency: NTT(mul_hint) == NTT(s2) ∘ pk_ntt
-    let a = ntt_4(s2);
-    let b = ntt_4(mul_hint);
     let mut i: u32 = 0;
-    while i != 4 {
+    while i != n {
         let ai: u128 = (*a.at(i)).try_into().unwrap();
         let pki: u128 = (*pk_ntt.at(i)).try_into().unwrap();
         let bi: u128 = (*b.at(i)).try_into().unwrap();
@@ -53,17 +55,32 @@ pub fn verify_hint_4(
         }
         i += 1;
     }
-
     // (2)+(3) s1 = msg_point − mul_hint (mod q); norm = Σ center(s1)² + center(s2)²
     let mut norm: u64 = 0;
     let mut j: u32 = 0;
-    while j != 4 {
-        let mp = to_u64(*msg_point.at(j));
-        let mh = to_u64(*mul_hint.at(j));
-        let s1 = (mp + Q - mh) % Q;
+    while j != n {
+        let s1 = (to_u64(*msg_point.at(j)) + Q - to_u64(*mul_hint.at(j))) % Q;
         norm += center_sq(s1);
         norm += center_sq(to_u64(*s2.at(j)));
         j += 1;
     }
     norm <= SIG_BOUND_512
+}
+
+/// Hint-based verify, n=4 (self-consistent test vector).
+pub fn verify_hint_4(
+    s2: Span<felt252>, pk_ntt: Span<felt252>, mul_hint: Span<felt252>, msg_point: Span<felt252>,
+) -> bool {
+    let a = ntt_4(s2);
+    let b = ntt_4(mul_hint);
+    verify_core(s2, pk_ntt, mul_hint, msg_point, a.span(), b.span(), 4)
+}
+
+/// Hint-based verify, n=512 (full Falcon-512).
+pub fn verify_hint_512(
+    s2: Span<felt252>, pk_ntt: Span<felt252>, mul_hint: Span<felt252>, msg_point: Span<felt252>,
+) -> bool {
+    let a = ntt_512(s2);
+    let b = ntt_512(mul_hint);
+    verify_core(s2, pk_ntt, mul_hint, msg_point, a.span(), b.span(), 512)
 }

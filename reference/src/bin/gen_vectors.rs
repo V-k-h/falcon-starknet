@@ -58,6 +58,80 @@ fn main() {
     assert!(max_s2 < 2048, "s2 coeffs are short (Falcon Gaussian)");
     eprintln!("[gen-vectors] codec OK: h[0..3]={:?}, s2[0..3]={:?}, max|s2|={}", &h[0..3], &s2[0..3], max_s2);
 
+    // ---- M4 e2e: reconstruct the hint-verify vector and check the norm bound in Rust ----
+    // (a passing norm here proves FN-DSA hash framing + decode + product are all correct)
+    use falcon_codegen::ntt::{negacyclic_mul, ntt_fast_ref};
+    use sha3::digest::{ExtendableOutput, Update, XofReader};
+    use sha3::Shake256;
+    const QI: i128 = 12289;
+
+    // hpk = SHAKE256(vrfy_key)[0..64]
+    let mut shk = Shake256::default();
+    shk.update(&vrfy_key);
+    let mut xof = shk.finalize_xof();
+    let mut hpk = [0u8; 64];
+    xof.read(&mut hpk);
+
+    // framed = nonce || hpk || 0x00 (raw) || 0x00 (empty ctx len) || message
+    let mut framed = Vec::new();
+    framed.extend_from_slice(&nonce);
+    framed.extend_from_slice(&hpk);
+    framed.push(0u8);
+    framed.push(0u8);
+    framed.extend_from_slice(message);
+
+    // c = hash_to_point(framed): 2-byte BE, reject >= 5q, mod q, 512 coeffs
+    let mut shk2 = Shake256::default();
+    shk2.update(&framed);
+    let mut r2 = shk2.finalize_xof();
+    let mut c: Vec<i128> = Vec::with_capacity(512);
+    let mut buf = [0u8; 2];
+    while c.len() < 512 {
+        r2.read(&mut buf);
+        let mut w = ((buf[0] as i128) << 8) | (buf[1] as i128);
+        if w < 61445 {
+            w %= QI;
+            c.push(w);
+        }
+    }
+
+    let hh: Vec<i128> = h.iter().map(|&x| x as i128).collect();
+    let s2i: Vec<i128> = s2.iter().map(|&x| x as i128).collect();
+    let s2_stored: Vec<i128> = s2i.iter().map(|&x| ((x % QI) + QI) % QI).collect();
+    let mul = negacyclic_mul(&s2i, &hh); // s2·h mod q
+    let pk_ntt = ntt_fast_ref(&hh);
+
+    let center = |x: i128| if x > QI / 2 { x - QI } else { x };
+    let mut norm: i128 = 0;
+    for i in 0..512 {
+        let s1 = (((c[i] - mul[i]) % QI) + QI) % QI;
+        let a = center(s1);
+        let b = center(s2_stored[i]);
+        norm += a * a + b * b;
+    }
+    eprintln!("[e2e] ||s1||^2+||s2||^2 = {}  (bound 34034726)", norm);
+    assert!(norm <= 34_034_726, "real fn-dsa signature must satisfy the norm bound");
+    eprintln!("[e2e] ✓ real Falcon-512 signature verifies (framing + decode + product correct)");
+
+    // Precompute the two forward NTTs (Cairo's ntt_512 is proven equal to this in
+    // test_ntt512; keeping them out of the verify test avoids compiling two 11k-line
+    // NTT bodies into one CASM unit — the known s2morrow frame-offset limit).
+    let a_ntt = ntt_fast_ref(&s2_stored);
+    let b_ntt = ntt_fast_ref(&mul);
+
+    // ---- emit the vector as snforge-loadable JSON (length-prefixed arrays) ----
+    // Loaded via read_json at runtime (avoids inline-literal CASM frame overflow).
+    let mut vals: Vec<i128> = Vec::new();
+    for a in [&s2_stored, &pk_ntt, &mul, &c, &a_ntt, &b_ntt] {
+        vals.push(a.len() as i128);
+        vals.extend_from_slice(a);
+    }
+    let body: Vec<String> = vals.iter().map(|v| v.to_string()).collect();
+    let json = format!("{{ \"verify512\": [{}] }}\n", body.join(", "));
+    let jp = "../packages/falcon/tests/data/verify512_kat.json";
+    std::fs::write(jp, json).expect("write json vector");
+    eprintln!("[e2e] wrote {jp}");
+
     let kat = VerifyKat {
         scheme: "Falcon-512 / FN-DSA (SHAKE256, DOMAIN_NONE, HASH_ID_RAW)".to_string(),
         logn: 9,
