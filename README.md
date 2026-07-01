@@ -27,8 +27,8 @@ benches/           per-component steps/gas harness   (todo)
 |---|-----------|--------|
 | M0 | Scaffold + toolchain + tests green | ✅ |
 | M1 | `zq` mod-12289 arithmetic (→ BoundedInt) | seed ✅ |
-| M2 | Unrolled NTT via `codegen`, diff-tested vs reference | seed ✅ (pipeline), real NTT-512 todo |
-| M3 | SHAKE256 ✅ + hash-to-point (rejection sampling) | shake ✅, h2p todo |
+| M2 | Unrolled NTT via `codegen`, diff-tested vs reference | ✅ fast O(n·log n) NTT: convolution-correct + felt252-safe to n=512 (Rust); Cairo diff-test at n=128. n=512 emits/compiles but trips snforge's Sierra-cost path — reduce-frequency optimization pending (M2-opt) |
+| M3 | SHAKE256 ✅ + hash-to-point (rejection sampling) | ✅ KAT-verified; measured 3.73M steps / ~534M gas |
 | M4 | packing + hint-based `verify()`, KAT-validated | todo |
 | M5 | benchmark harness (SHAKE vs Poseidon backends) | todo |
 

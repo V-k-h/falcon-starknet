@@ -72,4 +72,56 @@ mod tests {
             assert_eq!(c.simulate(&input), ntt_direct_ref(&input), "n={}", n);
         }
     }
+
+    // ---- M2: fast NTT ----
+    use crate::ntt::{build_ntt_fast_circuit, ntt_fast_ref};
+
+    #[test]
+    fn fast_ntt_is_negacyclic() {
+        // Convolution property proves the fast transform is a correct negacyclic NTT.
+        for &n in &[4usize, 8, 16, 32] {
+            let a: Vec<i128> = (0..n as i128).map(|i| (i * 31 + 1) % Q).collect();
+            let b: Vec<i128> = (0..n as i128).map(|i| (i * 17 + 9) % Q).collect();
+            let na = ntt_fast_ref(&a);
+            let nb = ntt_fast_ref(&b);
+            let nc = ntt_fast_ref(&negacyclic_conv(&a, &b));
+            for i in 0..n {
+                assert_eq!((na[i] * nb[i]) % Q, nc[i], "conv n={} i={}", n, i);
+            }
+        }
+    }
+
+    #[test]
+    fn fast_circuit_matches_ref_and_is_felt252_safe() {
+        for &n in &[4usize, 8, 16, 32, 64, 128, 256, 512] {
+            let c = build_ntt_fast_circuit(n);
+            assert!(c.max_abs_bound() < (1i128 << 120), "n={} bounds must be felt252-safe", n);
+            let input: Vec<i128> = (0..n as i128).map(|i| (i * 41 + 7) % Q).collect();
+            assert_eq!(c.simulate(&input), ntt_fast_ref(&input), "fidelity n={}", n);
+        }
+    }
+
+    #[test]
+    fn fast_ntt_512_op_count_is_nlogn() {
+        // sanity: O(n log n), far below the direct O(n^2)
+        let c = build_ntt_fast_circuit(512);
+        assert!(c.ops.len() < 40_000, "n=512 ops = {} (should be ~n log n)", c.ops.len());
+    }
+}
+
+#[cfg(test)]
+mod vectors {
+    use crate::ntt::ntt_fast_ref;
+    use crate::circuit::Q;
+    #[test]
+    fn print_ntt_vector() {
+        let input: Vec<i128> = (0..128i128).map(|i| (i * 41 + 7) % Q).collect();
+        let out = ntt_fast_ref(&input);
+        let sum: i128 = out.iter().sum();
+        println!("NTT128_SUM={}", sum);
+        println!("NTT128_0={}", out[0]);
+        println!("NTT128_1={}", out[1]);
+        println!("NTT128_63={}", out[63]);
+        println!("NTT128_127={}", out[127]);
+    }
 }

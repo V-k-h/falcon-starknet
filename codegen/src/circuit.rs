@@ -15,6 +15,7 @@ pub enum OpKind {
     Add,
     Sub,
     Mul,
+    Reduce, // reduce operand mod q → [0, q-1]
 }
 
 pub struct Op {
@@ -73,6 +74,14 @@ impl Circuit {
         self.push(OpKind::Mul, a, b, 0, lo, hi)
     }
 
+    /// Reduce mod q. Operand must be non-negative and < 2^128 (caller keeps it so
+    /// via the SHIFT pattern), so felt252→u128→(% q) is faithful. Bounds → [0, q-1].
+    pub fn reduce(&mut self, a: usize) -> usize {
+        assert!(self.lo[a] >= 0, "reduce operand must be non-negative (add SHIFT first)");
+        assert!(self.hi[a] < (1i128 << 120), "reduce operand must be < 2^120 (felt252-safe, i128-safe)");
+        self.push(OpKind::Reduce, a, 0, 0, 0, self.modulus - 1)
+    }
+
     pub fn set_output(&mut self, v: usize) {
         self.outputs.push(v);
     }
@@ -97,6 +106,7 @@ impl Circuit {
                 OpKind::Add => val[op.a] + val[op.b],
                 OpKind::Sub => val[op.a] - val[op.b],
                 OpKind::Mul => val[op.a] * val[op.b],
+                OpKind::Reduce => ((val[op.a] % self.modulus) + self.modulus) % self.modulus,
             };
         }
         self.outputs

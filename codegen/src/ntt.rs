@@ -72,3 +72,86 @@ pub fn build_ntt_circuit(n: usize) -> Circuit {
     }
     c
 }
+
+// ---------------------------------------------------------------------------
+// Fast NTT (M2): complete negacyclic Cooley-Tukey, O(n log n).
+//
+// zetas[i] = psi^{bitrev(i)}; standard DIT butterflies. Output is in
+// bit-reversed order — fine, because verification only needs the convolution
+// property (NTT(a)∘NTT(b) = NTT(a·b)), which holds elementwise in any fixed
+// order, as long as ALL operands use this same transform.
+// ---------------------------------------------------------------------------
+
+/// Smallest multiple of q that is ≥ (q-1)^2 = 150994944.  (12288·12289)
+pub const SHIFT: i128 = 151007232;
+
+fn bitrev(mut i: usize, bits: u32) -> usize {
+    let mut r = 0usize;
+    for _ in 0..bits {
+        r = (r << 1) | (i & 1);
+        i >>= 1;
+    }
+    r
+}
+
+fn zetas(n: usize) -> Vec<i128> {
+    let logn = n.trailing_zeros();
+    let psi = psi_2n(n as i128);
+    (0..n).map(|i| powmod(psi, bitrev(i, logn) as i128, Q)).collect()
+}
+
+/// Integer reference for the fast negacyclic NTT (in-place CT, bit-reversed out).
+pub fn ntt_fast_ref(a: &[i128]) -> Vec<i128> {
+    let n = a.len();
+    let z = zetas(n);
+    let mut x: Vec<i128> = a.iter().map(|&v| ((v % Q) + Q) % Q).collect();
+    let mut k = 1usize;
+    let mut len = n / 2;
+    while len >= 1 {
+        let mut start = 0;
+        while start < n {
+            let zeta = z[k];
+            k += 1;
+            for j in start..start + len {
+                let t = zeta * x[j + len] % Q;
+                x[j + len] = ((x[j] - t) % Q + Q) % Q;
+                x[j] = (x[j] + t) % Q;
+            }
+            start += 2 * len;
+        }
+        len /= 2;
+    }
+    x
+}
+
+/// Trace the fast NTT into a circuit, reducing every layer (bounds stay < 2^28).
+pub fn build_ntt_fast_circuit(n: usize) -> Circuit {
+    let z = zetas(n);
+    let mut c = Circuit::new(Q);
+    let mut x: Vec<usize> = (0..n).map(|_| c.input(0, Q - 1)).collect();
+    let shift = c.constant(SHIFT);
+
+    let mut k = 1usize;
+    let mut len = n / 2;
+    while len >= 1 {
+        let mut start = 0;
+        while start < n {
+            let zeta = c.constant(z[k]);
+            k += 1;
+            for j in start..start + len {
+                let t = c.mul(x[j + len], zeta);
+                let hi = c.add(x[j], t);
+                let a_sh = c.add(x[j], shift); // keep the difference non-negative
+                let lo = c.sub(a_sh, t);
+                x[j] = c.reduce(hi);
+                x[j + len] = c.reduce(lo);
+            }
+            start += 2 * len;
+        }
+        len /= 2;
+    }
+    for &v in &x {
+        c.set_output(v);
+    }
+    c
+}
