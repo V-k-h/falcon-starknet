@@ -12,3 +12,4 @@ pub mod hash_to_point;
 pub mod verify;
 
 pub mod ntt_generated;
+pub mod ntt512;

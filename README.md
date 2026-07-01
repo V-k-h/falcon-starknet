@@ -27,7 +27,7 @@ benches/           per-component steps/gas harness   (todo)
 |---|-----------|--------|
 | M0 | Scaffold + toolchain + tests green | ✅ |
 | M1 | `zq` mod-12289 arithmetic (→ BoundedInt) | seed ✅ |
-| M2 | Unrolled NTT via `codegen`, diff-tested vs reference | ✅ fast O(n·log n) NTT: convolution-correct + felt252-safe to n=512 (Rust); Cairo diff-test at n=128. n=512 emits/compiles but trips snforge's Sierra-cost path — reduce-frequency optimization pending (M2-opt) |
+| M2 | Unrolled NTT via `codegen`, diff-tested vs reference | ✅ fast O(n·log n) NTT with lazy reduction; **n=512 compiles & passes snforge** (57K steps / ~17.2M gas), diff-tested vs Rust reference |
 | M3 | SHAKE256 ✅ + hash-to-point (rejection sampling) | ✅ KAT-verified; measured 3.73M steps / ~534M gas |
 | M4 | hint-based `verify()` core + norm bound | ✅ core (hint-check + norm) validated end-to-end at n=4 (accept + 2 reject paths). Real fn-dsa sig/pubkey byte decoding + FN-DSA hash framing = M4-decode (next); n=512 gated on M2-opt |
 | M5 | benchmark harness (SHAKE vs Poseidon backends) | todo |

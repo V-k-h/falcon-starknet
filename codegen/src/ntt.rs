@@ -124,34 +124,63 @@ pub fn ntt_fast_ref(a: &[i128]) -> Vec<i128> {
     x
 }
 
-/// Trace the fast NTT into a circuit, reducing every layer (bounds stay < 2^28).
+/// How many butterfly layers between reductions. Bounds grow ~q per layer, so
+/// after k layers the magnitude is ~q^(k+1); k=6 → ~q^7 ≈ 2^95, safely < 2^120
+/// (i128/tracker) and < 2^128 (felt→u128 at reduction). Fewer reductions ⇒ far
+/// less generated code (this is the M2-opt that lets n=512 compile).
+pub const REDUCE_EVERY: usize = 6;
+
+/// Trace the fast NTT into a circuit with LAZY reduction (reduce every
+/// REDUCE_EVERY layers + at the end). All field values stay non-negative via a
+/// per-butterfly SHIFT (a multiple of q ≥ the subtrahend's bound), so the emitted
+/// felt252 arithmetic is faithful and reduction is a plain u128 `% q`.
 pub fn build_ntt_fast_circuit(n: usize) -> Circuit {
     let z = zetas(n);
     let mut c = Circuit::new(Q);
     let mut x: Vec<usize> = (0..n).map(|_| c.input(0, Q - 1)).collect();
-    let shift = c.constant(SHIFT);
 
     let mut k = 1usize;
     let mut len = n / 2;
+    let mut layer = 0usize;
     while len >= 1 {
-        let mut start = 0;
-        while start < n {
-            let zeta = c.constant(z[k]);
-            k += 1;
-            for j in start..start + len {
-                let t = c.mul(x[j + len], zeta);
-                let hi = c.add(x[j], t);
-                let a_sh = c.add(x[j], shift); // keep the difference non-negative
-                let lo = c.sub(a_sh, t);
-                x[j] = c.reduce(hi);
-                x[j + len] = c.reduce(lo);
-            }
-            start += 2 * len;
-        }
+        while_layer(&mut c, &z, &mut k, &mut x, len, n);
+        layer += 1;
         len /= 2;
+        if layer % REDUCE_EVERY == 0 {
+            for i in 0..n {
+                x[i] = c.reduce(x[i]);
+            }
+        }
+    }
+    if layer % REDUCE_EVERY != 0 {
+        for i in 0..n {
+            x[i] = c.reduce(x[i]);
+        }
     }
     for &v in &x {
         c.set_output(v);
     }
     c
+}
+
+/// One CT layer of butterflies (no reduction; SHIFT keeps values non-negative).
+fn while_layer(c: &mut Circuit, z: &[i128], k: &mut usize, x: &mut [usize], len: usize, n: usize) {
+    let mut start = 0;
+    while start < n {
+        let zeta = c.constant(z[*k]);
+        *k += 1;
+        for j in start..start + len {
+            let t = c.mul(x[j + len], zeta);
+            // SHIFT = smallest multiple of q ≥ current bound of t, so lo ≥ 0.
+            let t_hi = c.hi[t];
+            let shift_val = ((t_hi + Q - 1) / Q) * Q;
+            let shift = c.constant(shift_val);
+            let hi = c.add(x[j], t);
+            let a_sh = c.add(x[j], shift);
+            let lo = c.sub(a_sh, t);
+            x[j] = hi;
+            x[j + len] = lo;
+        }
+        start += 2 * len;
+    }
 }
