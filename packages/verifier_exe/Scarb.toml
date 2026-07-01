@@ -1,0 +1,10 @@
+[package]
+name = "verifier_exe"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+falcon = { path = "../falcon" }
+
+[cairo]
+enable-gas = false

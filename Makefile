@@ -19,3 +19,7 @@ gen-vectors:
 # Regenerate the unrolled NTT (n=512) from the codegen
 ntt:
 	cargo run -p falcon-codegen --bin cairo-gen -- 512 packages/falcon/src/ntt512.cairo
+
+# Full verify (both NTTs in-line) on the real fn-dsa signature via cairo-run
+verify-exe:
+	cd packages/verifier_exe && scarb cairo-run --print-resource-usage "$$(cat ../falcon/tests/data/verify512_args.json)"

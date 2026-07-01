@@ -132,6 +132,18 @@ fn main() {
     std::fs::write(jp, json).expect("write json vector");
     eprintln!("[e2e] wrote {jp}");
 
+    // cairo-run args: [[s2],[pk_ntt],[mul_hint],[msg_point]] for `scarb cairo-run`
+    let arr_json = |a: &[i128]| -> String {
+        format!("[{}]", a.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","))
+    };
+    let args = format!(
+        "[{},{},{},{}]\n",
+        arr_json(&s2_stored), arr_json(&pk_ntt), arr_json(&mul), arr_json(&c),
+    );
+    let ap = "../packages/falcon/tests/data/verify512_args.json";
+    std::fs::write(ap, args).expect("write args");
+    eprintln!("[e2e] wrote {ap}");
+
     let kat = VerifyKat {
         scheme: "Falcon-512 / FN-DSA (SHAKE256, DOMAIN_NONE, HASH_ID_RAW)".to_string(),
         logn: 9,

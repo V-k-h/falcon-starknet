@@ -49,6 +49,6 @@ cargo run -p falcon-codegen --bin cairo-gen -- 8 packages/falcon/src/ntt_felt252
 
 M0/M1 green. `packages/falcon` has KAT-verified SHAKE256 and seed `zq`. The `codegen` pipeline (DSL → simulate oracle → emit compiling Cairo) works end-to-end on a seed NTT. Next: real Falcon-convention unrolled NTT-512 in `codegen`, validated against `rust-fn-dsa` vectors (M2), then hash-to-point (M3).
 
-## Known follow-up: full in-`verify` NTT
+## Full in-`verify` NTT — resolved
 
-`verify_hint_512` (Cairo runs both NTTs itself) trips a CASM per-function offset limit — the unrolled n=512 NTT is near the limit alone, so two calls need it **split into per-layer sub-functions** (each `#[inline(never)]`, Array-plumbed between layers). Until then, the real-signature test precomputes the two forward NTTs (Cairo's `ntt_512` is proven equal to the reference in `test_ntt512`) and exercises the verify core on genuine data.
+`verify_hint_512` runs BOTH forward NTTs itself; snforge's universal-sierra-compiler hit offset/statement limits on that, so it runs via `scarb cairo-run` (a different compiler path) in the `verifier_exe` package. `make verify-exe` executes it on a real fn-dsa Falcon-512 signature and returns `[1]` (accepted) at ~143K steps.
