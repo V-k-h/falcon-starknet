@@ -30,7 +30,7 @@ benches/           per-component steps/gas harness   (todo)
 | M2 | Unrolled NTT via `codegen`, diff-tested vs reference | ✅ fast O(n·log n) NTT with lazy reduction; **n=512 compiles & passes snforge** (57K steps / ~17.2M gas), diff-tested vs Rust reference |
 | M3 | SHAKE256 ✅ + hash-to-point (rejection sampling) | ✅ KAT-verified; measured 3.73M steps / ~534M gas |
 | M4 | full verify + real-signature e2e | ✅ FN-DSA hash framing pinned (nonce‖SHAKE256(pk)[64]‖0x00‖0x00‖msg); pubkey+sig decoders round-trip-validated; **real fn-dsa Falcon-512 signature verified in Cairo** (verify_core: hint-check + norm, 198K steps). Full in-`verify` double-NTT gated on a CASM frame-offset opt (NTTs precomputed; Cairo ntt_512 proven separately in test_ntt512) |
-| M5 | benchmark harness (SHAKE vs Poseidon backends) | todo |
+| M5 | benchmark harness | ✅ `make bench` → per-component steps/gas table (benches/bench.sh, benches/RESULTS.md) |
 
 ## Run
 
@@ -48,3 +48,7 @@ cargo run -p falcon-codegen --bin cairo-gen -- 8 packages/falcon/src/ntt_felt252
 ## Status
 
 M0/M1 green. `packages/falcon` has KAT-verified SHAKE256 and seed `zq`. The `codegen` pipeline (DSL → simulate oracle → emit compiling Cairo) works end-to-end on a seed NTT. Next: real Falcon-convention unrolled NTT-512 in `codegen`, validated against `rust-fn-dsa` vectors (M2), then hash-to-point (M3).
+
+## Known follow-up: full in-`verify` NTT
+
+`verify_hint_512` (Cairo runs both NTTs itself) trips a CASM per-function offset limit — the unrolled n=512 NTT is near the limit alone, so two calls need it **split into per-layer sub-functions** (each `#[inline(never)]`, Array-plumbed between layers). Until then, the real-signature test precomputes the two forward NTTs (Cairo's `ntt_512` is proven equal to the reference in `test_ntt512`) and exercises the verify core on genuine data.
