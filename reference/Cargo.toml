@@ -3,8 +3,14 @@ name = "falcon-reference"
 version = "0.1.0"
 edition = "2021"
 
-# TODO (M1/M4): add Thomas Pornin's FN-DSA crates as the authoritative reference
-# and KAT / test-vector generator (public domain, standard SHAKE256):
-#   fn-dsa = "..."   (or fn-dsa-kgen / fn-dsa-sign / fn-dsa-vrfy)
-# This crate will emit JSON vectors into packages/falcon/tests/data/.
+# Thomas Pornin's public-domain FN-DSA (standard SHAKE256) — authoritative
+# reference + KAT/test-vector generator for the Cairo verifier.
 [dependencies]
+fn-dsa = "0.3"
+rand_core = { version = "0.6", features = ["getrandom"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "gen-vectors"
+path = "src/bin/gen_vectors.rs"
