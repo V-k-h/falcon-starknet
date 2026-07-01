@@ -9,5 +9,6 @@
 pub mod zq;
 pub mod shake256;
 pub mod hash_to_point;
+pub mod verify;
 
 pub mod ntt_generated;

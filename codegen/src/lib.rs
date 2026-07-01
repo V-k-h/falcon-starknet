@@ -125,3 +125,35 @@ mod vectors {
         println!("NTT128_127={}", out[127]);
     }
 }
+
+#[cfg(test)]
+mod verify_vec {
+    use crate::circuit::Q;
+    use crate::ntt::ntt_fast_ref;
+    fn conv(a: &[i128], b: &[i128]) -> Vec<i128> {
+        let n = a.len(); let mut c = vec![0i128; n];
+        for i in 0..n { for j in 0..n {
+            let k=i+j; let p=a[i]*b[j];
+            if k<n { c[k]=((c[k]+p)%Q+Q)%Q } else { c[k-n]=((c[k-n]-p)%Q+Q)%Q }
+        }} c
+    }
+    fn st(v:&[i128])->Vec<i128>{v.iter().map(|&x|((x%Q)+Q)%Q).collect()}
+    #[test]
+    fn print_verify4() {
+        let s1c = [1i128,-2,0,1];
+        let s2c = [2i128,1,-1,0];
+        let h   = [3i128,5,7,11];
+        let mul = conv(&s2c,&h);                 // s2*h
+        let mp: Vec<i128> = (0..4).map(|i|(((s1c[i]+mul[i])%Q)+Q)%Q).collect(); // s1+mul
+        let pk_ntt = ntt_fast_ref(&st(&h));
+        // internal check: NTT(mul) == NTT(s2) ∘ pk_ntt
+        let nm = ntt_fast_ref(&mul); let ns2 = ntt_fast_ref(&st(&s2c));
+        for i in 0..4 { assert_eq!(nm[i],(ns2[i]*pk_ntt[i])%Q); }
+        let norm:i128 = (0..4).map(|i|s1c[i]*s1c[i]+s2c[i]*s2c[i]).sum();
+        println!("S2={:?}", st(&s2c));
+        println!("PK_NTT={:?}", pk_ntt);
+        println!("MUL_HINT={:?}", st(&mul));
+        println!("MSG_POINT={:?}", mp);
+        println!("NORM={}", norm);
+    }
+}
