@@ -290,7 +290,7 @@ the absence of overflow, eliminating runtime range checks. When all intermediate
 below $2^{128}$, the generator switches to native \texttt{felt252} arithmetic and reduces only
 where necessary---cutting the generated NTT from $\sim$41.6k lines (typed) to $\sim$11.3k.
 
-\subsection{Lazy reduction and the shift trick}
+\subsection{Lazy reduction and the shift trick}\label{sec:lazy}
 A butterfly \eqref{eq:butterfly} roughly multiplies the magnitude bound by $q$. After $\ell$
 unreduced layers,
 \begin{equation}
@@ -328,6 +328,56 @@ Keccak-$f[1600]$ (pure Cairo) & $\sim$360{,}000 & $\sim$50\,M \\
 Standard SHAKE-256 hash-to-point ($\sim$10 permutations) is therefore $\sim$3.7\,M steps---the
 reason a Poseidon variant is $\sim$50$\times$ cheaper but non-interoperable. A future
 \texttt{keccak\_f1600} syscall (SNIP-32) would collapse the gap.
+
+\subsection{Cost-model note: K-RED is an off-chain optimization}\label{sec:kred}
+A natural question is whether the K-RED reduction of Longa and Naehrig
+\href{https://eprint.iacr.org/2016/504}{(ePrint 2016/504)} would speed up the on-chain
+transform. K-RED exploits $q=3\cdot 2^{12}+1$: writing a product as $C=C_0+2^{12}C_1$ with
+$C_0=C\bmod 2^{12}$, one has $3\cdot 2^{12}\equiv-1$, hence
+\begin{equation}
+  3C \;\equiv\; 3C_0 - C_1 \pmod q,
+\end{equation}
+and twiddles are pre-scaled by $3^{-1}\equiv 8193$ to absorb the spurious factor of $3$. On a
+CPU this is a large win---an expensive division is replaced by a mask, a shift, a small
+multiply, and a subtract. \emph{On-chain it does not apply}, because the Cairo/STARK cost model
+inverts the assumptions it relies on.
+
+The unit that is paid for on-chain is VM steps plus builtin cells (\texttt{range\_check},
+\texttt{bitwise}), not CPU cycles. There, a field multiply is a single native step with no
+range check, whereas the bit operations K-RED depends on---$C\,\&\,(2^{12}{-}1)$ and
+$C\gg 12$---compile to a range-checked \texttt{div\_rem} (equivalently a \texttt{bitwise}
+call). The cheap-on-CPU primitive is precisely the expensive-on-Cairo one:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+ & CPU (K-RED's target) & on-chain Cairo \\
+\midrule
+field multiply & moderate & \textbf{cheap} (1 step) \\
+shift / mask & free & \textbf{range-checked} (dear) \\
+full reduction $\bmod\,q$ & very expensive & one \texttt{div\_rem} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The decisive point is Section~\ref{sec:lazy}: because $q$ is tiny beside the $\sim 2^{251}$
+field, we reduce \emph{lazily}, so most butterflies carry \emph{zero} range checks. K-RED
+forces a partial reduction on \emph{every} butterfly, reintroducing one range check
+$\times\,2304$ that lazy reduction removes:
+\begin{center}
+\begin{tabular}{lcl}
+\toprule
+per butterfly & range checks & field ops \\
+\midrule
+lazy felt252 (this work) & $0$ & $\sim$3--4 (mul, add, sub) \\
+K-RED & $1$ (\texttt{div\_rem} by $2^{12}$) & $+2$ ($3C_0-C_1$), output non-canonical \\
+\bottomrule
+\end{tabular}
+\end{center}
+No reduction is even saved: in Cairo \texttt{div\_rem} by $q$ and by $2^{12}$ cost the same
+range check, so K-RED only adds the $3C_0-C_1$ and the $3^{-1}$ twiddle scaling. In one line:
+K-RED fits a small-field machine where multiplies are dear and bit-tricks free (the native
+signer); the on-chain verifier is a huge-field machine where multiplies are cheap and
+bit-tricks dear, so lazy reduction over $\Rq$ is the right lever instead.
 
 % ===========================================================================
 \section{Measured results}
