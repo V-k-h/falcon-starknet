@@ -13,6 +13,7 @@
 
 use crate::ntt512::ntt_512;
 use crate::ntt_generated::ntt_4;
+use crate::packing::unpack_512;
 
 const Q: u64 = 12289;
 const HALF_Q: u64 = 6144; // ⌊q/2⌋
@@ -83,4 +84,20 @@ pub fn verify_hint_512(
     let a = ntt_512(s2);
     let b = ntt_512(mul_hint);
     verify_core(s2, pk_ntt, mul_hint, msg_point, a.span(), b.span(), 512)
+}
+
+/// Hint-based verify with base-Q packed inputs (29 felts each, ~17.66x smaller
+/// calldata). Unpacks the four polynomials, then runs `verify_hint_512`. This
+/// trades L1 calldata (2048 -> 116 felts) for the on-chain unpack compute.
+pub fn verify_hint_512_packed(
+    s2_p: Span<felt252>,
+    pk_ntt_p: Span<felt252>,
+    mul_hint_p: Span<felt252>,
+    msg_point_p: Span<felt252>,
+) -> bool {
+    let s2 = unpack_512(s2_p);
+    let pk_ntt = unpack_512(pk_ntt_p);
+    let mul_hint = unpack_512(mul_hint_p);
+    let msg_point = unpack_512(msg_point_p);
+    verify_hint_512(s2.span(), pk_ntt.span(), mul_hint.span(), msg_point.span())
 }

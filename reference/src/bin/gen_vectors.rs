@@ -167,6 +167,15 @@ fn main() {
         "// pubkey ({} felts) = base-Q pack(h);  signature ({} felts) = pack(s2) ++ pack(msg_point)\nPUBKEY: [{}]\nSIG: [{}]\n",
         pk_felts.len(), sig_felts.len(), pk_felts.join(", "), sig_felts.join(", "),
     );
+    // packed cairo-run args for the hint verifier: [[pack(s2)],[pack(pk_ntt)],[pack(mul)],[pack(c)]]
+    let pj = |a: &[i128]| format!("[{}]", pack(a).join(","));
+    let packed_args = format!(
+        "[{},{},{},{}]\n", pj(&s2_stored), pj(&pk_ntt), pj(&mul), pj(&c),
+    );
+    std::fs::write("../packages/falcon/tests/data/verify512_packed_args.json", packed_args)
+        .expect("write packed args");
+    eprintln!("[e2e] wrote verify512_packed_args.json (4 x 29 = 116 packed felts)");
+
     let fp = "../packages/falcon/tests/data/pqbench_fixture.txt";
     std::fs::write(fp, &fixture).expect("write fixture");
     eprintln!("[e2e] wrote {fp}  (pubkey {} felts, signature {} felts)", pk_felts.len(), sig_felts.len());
