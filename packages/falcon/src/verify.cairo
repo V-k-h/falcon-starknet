@@ -15,6 +15,7 @@ use crate::ntt512::ntt_512;
 use crate::ntt_looped::ntt_512_looped;
 use crate::ntt_generated::ntt_4;
 use crate::packing::unpack_512;
+use crate::hash_to_point::hash_to_point;
 
 const Q: u64 = 12289;
 const HALF_Q: u64 = 6144; // ⌊q/2⌋
@@ -97,6 +98,26 @@ pub fn verify_hint_512_looped(
     let a = ntt_512_looped(s2);
     let b = ntt_512_looped(mul_hint);
     verify_core(s2, pk_ntt, mul_hint, msg_point, a.span(), b.span(), 512)
+}
+
+/// SELF-CONTAINED verify: computes the challenge on-chain from the FN-DSA framed
+/// bytes (nonce ‖ SHAKE256(pk)[0..64] ‖ 0x00 ‖ 0x00 ‖ message) via interoperable
+/// SHAKE-256 hash-to-point, then runs the looped-NTT verify. This is the true
+/// standard Falcon-512 verifier — no pre-hashed msg_point is trusted from the
+/// caller. Interoperable, but the pure-Cairo SHAKE dominates cost (see docs):
+/// this is a measurement/reference path, expected to exceed on-chain limits until
+/// a keccak_f1600 syscall (SNIP-32) exists.
+pub fn verify_full_shake(
+    framed: Array<u8>, s2: Span<felt252>, pk_ntt: Span<felt252>, mul_hint: Span<felt252>,
+) -> bool {
+    let c = hash_to_point(framed); // Array<u16>, 512 challenge coeffs in [0,q)
+    let mut msg_point: Array<felt252> = array![];
+    let mut i: u32 = 0;
+    while i != 512 {
+        msg_point.append((*c.at(i)).into());
+        i += 1;
+    }
+    verify_hint_512_looped(s2, pk_ntt, mul_hint, msg_point.span())
 }
 
 /// Hint-based verify with base-Q packed inputs (29 felts each, ~17.66x smaller

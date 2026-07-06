@@ -17,5 +17,11 @@ function = "verifier_exe::main"
 name = "verify_looped"
 function = "verifier_exe::main_looped"
 
+# Self-contained: hashes (nonce||pk||msg) on-chain via interoperable SHAKE-256,
+# then verifies. Measures the true standard-Falcon cost (hash dominates).
+[[target.executable]]
+name = "verify_full_shake"
+function = "verifier_exe::main_full_shake"
+
 [cairo]
 enable-gas = false

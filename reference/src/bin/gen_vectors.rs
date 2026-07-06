@@ -144,6 +144,19 @@ fn main() {
     std::fs::write(ap, args).expect("write args");
     eprintln!("[e2e] wrote {ap}");
 
+    // ---- on-chain hash-to-point input: the exact FN-DSA framed bytes ----
+    // framed = nonce || SHAKE256(pk)[0..64] || 0x00 || 0x00 || message.
+    // A self-contained verifier computes msg_point = hash_to_point(framed) itself
+    // (interoperable SHAKE256), instead of taking the pre-hashed msg_point.
+    let framed_json: Vec<String> = std::iter::once(framed.len() as i128)
+        .chain(framed.iter().map(|&b| b as i128))
+        .map(|v| v.to_string())
+        .collect();
+    let fjp = "../packages/falcon/tests/data/verify512_framed.json";
+    std::fs::write(fjp, format!("{{ \"framed\": [{}] }}\n", framed_json.join(", ")))
+        .expect("write framed");
+    eprintln!("[e2e] wrote {fjp}  ({} framed bytes)", framed.len());
+
     // ---- pq-verifiers fixture: base-Q pack (18 coeffs/felt) -> 29 felts each ----
     // Direct-NTT encoding: public_key = pack(h) [29], signature = pack(s2) ++ pack(msg_point) [58].
     use num_bigint::BigUint;

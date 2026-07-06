@@ -6,15 +6,19 @@ Signing/keygen stay off-chain (they need floating point); only verification runs
 
 ## Live on Starknet Sepolia
 
-The looped-NTT verifier is deployed and **verified a real fn-dsa Falcon-512 signature on-chain** (`verify(...) -> true`):
+A **fully self-contained, interoperable standard Falcon-512 verifier** is deployed and **verified a real fn-dsa signature on-chain, in a real transaction** — hashing the message with SHAKE-256 and running the NTTs + norm check entirely on Starknet.
 
 | | value |
 |---|---|
-| Contract | [`0x07e50414eeafc7988169e5e50788878a17f79b98715fe574a95d4833ebfed412`](https://sepolia.voyager.online/contract/0x07e50414eeafc7988169e5e50788878a17f79b98715fe574a95d4833ebfed412) |
-| Class hash | [`0x6460b617f042452543962baecfd42165999171677e91cbb9dc381e60decb81e`](https://sepolia.voyager.online/class/0x06460b617f042452543962baecfd42165999171677e91cbb9dc381e60decb81e) |
-| Entrypoint | `verify(s2, pk_ntt, mul_hint, msg_point)` — two forward NTTs + hint/norm core |
+| Contract (self-contained) | [`0x022a50446b59492b08eb740dd38a5f2446676e85932af8c784c94f1b282d1c24`](https://sepolia.voyager.online/contract/0x022a50446b59492b08eb740dd38a5f2446676e85932af8c784c94f1b282d1c24) |
+| Class hash | [`0x593379f8ef06dacefc71309020b459a97a960b901f3eac6ddf64ac786a6468f`](https://sepolia.voyager.online/class/0x0593379f8ef06dacefc71309020b459a97a960b901f3eac6ddf64ac786a6468f) |
+| `verify_full(framed, s2, pk_ntt, mul_hint) -> true` — invoke tx | [`0x027162a7...b781b409d`](https://sepolia.voyager.online/tx/0x027162a7633e609bc0b539c24dcf4858918e928b01e01fb4204c211b781b409d) |
+| Cost of that tx | **704,797,440 L2 gas** (~20 testnet STRK) — SHAKE hash-to-point dominates |
+| `verify(...)` — hint/norm core, pre-hashed msg_point | also embedded (looped NTT) |
 
-The deployable path uses `verify_hint_512_looped` (compact looped NTT). The fully-unrolled NTT is ~10× cheaper per transform but its ~306k-felt class is ~3.7× over Starknet's contract class-size cap, so it cannot be declared. See [docs/implementation.tex](docs/implementation.tex) §Deployability.
+`verify_full` computes `msg_point = HashToPoint(nonce ‖ SHAKE256(pk)[0..64] ‖ 0x00 ‖ 0x00 ‖ message)` on-chain with interoperable SHAKE-256 — so it verifies *real* Falcon signatures, no trusted pre-hash. Cost is dominated by the pure-Cairo SHAKE (~3.7M of the ~4.7M steps); a `keccak_f1600` syscall (SNIP-32) would cut it sharply.
+
+The NTT uses `ntt_512_looped` (compact looped transform). The fully-unrolled NTT is ~10× cheaper per transform but its ~306k-felt class is ~3.7× over Starknet's contract class-size cap, so it cannot be declared. See [docs/implementation.tex](docs/implementation.tex) §Deployability.
 
 ## Design decisions (why)
 

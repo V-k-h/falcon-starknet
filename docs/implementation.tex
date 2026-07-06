@@ -457,6 +457,26 @@ looped, deployed (\texttt{snforge}) & --- & 94.1\,M & \textbf{yes} \\
 The \texttt{snforge} row is a genuine on-chain measurement: the \texttt{FalconVerifier} contract is
 declared, deployed, and invoked, and it accepts the signature.
 
+\paragraph{Self-contained verify, deployed live on Sepolia.} The \texttt{verify\_full} entrypoint
+computes the challenge on-chain---$\text{msg\_point}=\text{HashToPoint}(\text{nonce}\,\|\,
+\text{SHAKE256}(\text{pk})[0{:}64]\,\|\,\texttt{0x00}\,\|\,\texttt{0x00}\,\|\,\text{message})$ with
+interoperable SHAKE-256---then runs the looped NTT verify. It is deployed on Starknet Sepolia and
+was invoked in a real transaction that \emph{accepted} a genuine fn-dsa signature:
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+self-contained \texttt{verify\_full} (real signature, on-chain SHAKE) & value \\
+\midrule
+steps (\texttt{scarb execute}) & 4{,}716{,}923 \\
+range-check builtin & 400{,}592 \\
+L2 gas (Sepolia invoke receipt) & 704{,}797{,}440 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The class fits the contract size cap and the transaction fits per-transaction execution limits, so
+a fully interoperable standard Falcon-512 verifier \emph{is deployable and live today}. Cost is
+dominated by the pure-Cairo SHAKE ($\sim$3.7\,M of the $\sim$4.7\,M steps).
+
 \paragraph{Auxiliary costs.}
 \begin{center}
 \begin{tabular}{lrr}
@@ -475,9 +495,12 @@ Norm acceptance bound $\lfloor\beta^2\rfloor$ & \multicolumn{2}{r}{$34{,}034{,}7
 steps for the full verify, well under published $\sim$665\,k-step figures---but it is not
 deployable, being $3.74\times$ over the class-size cap (\S\ref{sec:deploy}). The looped verifier
 \emph{is} deployable and lands at 718\,k steps, on par with those figures while running as a real
-contract. Hash-to-point in standard SHAKE-256 remains the dominant term and the true frontier: a
-builtin-hash variant is $\sim$50--100$\times$ cheaper but non-interoperable, and a
-\texttt{keccak\_f1600} syscall (SNIP-32) would let the interoperable hash fit alongside the looped
-NTT.
+contract. Adding interoperable SHAKE-256 hash-to-point on-chain (\texttt{verify\_full}) takes the
+full self-contained verify to $\sim$4.7\,M steps / $\sim$705\,M L2 gas---still within both the
+class-size cap and per-transaction limits, hence deployed and accepting real signatures on Sepolia.
+Hash-to-point is the dominant term and the true frontier: a builtin-hash variant is
+$\sim$50--100$\times$ cheaper but non-interoperable (and, lacking a matching signer, cannot
+\emph{accept} a real signature), while a \texttt{keccak\_f1600} syscall (SNIP-32) would cut the
+interoperable hash sharply.
 
 \end{document}

@@ -19,11 +19,21 @@ pub trait IFalconVerifier<TContractState> {
         mul_hint: Array<felt252>,
         msg_point: Array<felt252>,
     ) -> bool;
+
+    /// Self-contained standard verify: hashes the FN-DSA framed bytes on-chain
+    /// (interoperable SHAKE-256) to the challenge, then verifies.
+    fn verify_full(
+        self: @TContractState,
+        framed: Array<u8>,
+        s2: Array<felt252>,
+        pk_ntt: Array<felt252>,
+        mul_hint: Array<felt252>,
+    ) -> bool;
 }
 
 #[starknet::contract]
 pub mod FalconVerifier {
-    use falcon::verify::verify_hint_512_looped;
+    use falcon::verify::{verify_hint_512_looped, verify_full_shake};
 
     #[storage]
     struct Storage {}
@@ -38,6 +48,16 @@ pub mod FalconVerifier {
             msg_point: Array<felt252>,
         ) -> bool {
             verify_hint_512_looped(s2.span(), pk_ntt.span(), mul_hint.span(), msg_point.span())
+        }
+
+        fn verify_full(
+            self: @ContractState,
+            framed: Array<u8>,
+            s2: Array<felt252>,
+            pk_ntt: Array<felt252>,
+            mul_hint: Array<felt252>,
+        ) -> bool {
+            verify_full_shake(framed, s2.span(), pk_ntt.span(), mul_hint.span())
         }
     }
 }
