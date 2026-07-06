@@ -7,8 +7,8 @@ edition = "2024_07"
 falcon = { path = "../falcon" }
 
 [dev-dependencies]
-snforge_std = "0.48.1"
-assert_macros = "2.12.1"
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.59.0" }
+assert_macros = "2.15.1"
 
 [[target.starknet-contract]]
 sierra = true
