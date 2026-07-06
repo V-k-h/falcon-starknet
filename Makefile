@@ -1,4 +1,4 @@
-.PHONY: test test-rust bench gen-vectors ntt
+.PHONY: test test-rust bench gen-vectors ntt zetas verify-exe verify-exe-looped args
 
 # Cairo verifier tests
 test:
@@ -24,6 +24,24 @@ gen-vectors:
 ntt:
 	cargo run -p falcon-codegen --bin cairo-gen -- 512 packages/falcon/src/ntt512.cairo
 
-# Full verify (both NTTs in-line) on the real fn-dsa signature via cairo-run
-verify-exe:
-	cd packages/verifier_exe && scarb cairo-run --print-resource-usage "$$(cat ../falcon/tests/data/verify512_args.json)"
+# Regenerate the u64 twiddle table for the looped (deployable) NTT.
+zetas:
+	cargo run -p falcon-codegen --bin cairo-gen -- 512 --zetas packages/falcon/src/ntt_zetas.cairo
+
+# Build the flat, hex-serialized argument file for `scarb execute` from the
+# base-Q packed KAT (4 arrays of 29 felts -> [len,elems] x4 = 120 felts).
+args:
+	python3 -c "import json; d=json.load(open('packages/falcon/tests/data/verify512_packed_args.json')); f=[]; [ (f.append(len(a)), f.extend(a)) for a in d ]; json.dump([hex(x) for x in f], open('packages/verifier_exe/args_looped.json','w'))"
+	cp packages/verifier_exe/args_looped.json packages/verifier_exe/args_unrolled.json
+
+# Full verify on a REAL fn-dsa signature, in Cairo STEPS, via `scarb execute`
+# (the modern replacement for `scarb cairo-run`). UNROLLED NTT: fast but not
+# deployable (~3.7x over the contract class-size cap).
+verify-exe: args
+	cd packages/verifier_exe && scarb execute --executable-name verify_unrolled \
+		--print-program-output --print-resource-usage --arguments-file args_unrolled.json
+
+# Same, but the DEPLOYABLE looped NTT (fits the cap; this is the on-chain path).
+verify-exe-looped: args
+	cd packages/verifier_exe && scarb execute --executable-name verify_looped \
+		--print-program-output --print-resource-usage --arguments-file args_looped.json

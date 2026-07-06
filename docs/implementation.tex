@@ -304,13 +304,54 @@ kept non-negative in the field by adding a shift: for $a-b$ with $b\in[0,B]$,
 \end{equation}
 so the emitted expression never underflows into a large field element.
 
-\subsection{Unrolled vs.\ looped, and compiler limits}
-The fully-unrolled NTT is fast but large; two copies (verify needs two transforms) exceed the
-Sierra compiler's per-function offset limit and its statement-count cast bound under the test
-runner. The mitigations, in order of effect: (i) chunk the transform into per-layer functions;
-(ii) run the full two-NTT verifier through \texttt{scarb cairo-run} (a different compilation
-path); (iii) for an audit-friendly baseline, use a \emph{looped} NTT---correct and small, but
-markedly slower. These occupy different points on the cost/compilability frontier.
+\subsection{Deployability: the contract class-size cap}\label{sec:deploy}
+The fully-unrolled NTT is fast but large, and the binding constraint is not a transient compiler
+quirk---it is Starknet's \emph{maximum contract class size}. A contract exposing
+\texttt{verify\_hint\_512} (both forward transforms plus the norm core; the twiddles and butterfly
+code are shared once via \verb|#[inline(never)]|) compiles to
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+ & Sierra felts & bytecode & multiple of cap \\
+\midrule
+allowed (class-size cap) & 81{,}920 & 4{,}089{,}446 B & --- \\
+unrolled \texttt{ntt\_512} verifier & 306{,}442 & 17{,}728{,}684 B & $3.74\times$ / $4.33\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+so it cannot be declared on-chain; the universal-sierra-compiler additionally raises an
+\texttt{ApChangeError} (offset overflow) on the contract path. Emitting the transform as one
+function \emph{per NTT layer}, threaded through an \texttt{Array} of \texttt{felt252}
+(\texttt{emit\_module\_layered}), produces valid Sierra with small per-frame offsets but does
+\emph{not} shrink the total below the cap---the code is the same size, merely partitioned. The
+unrolled path is therefore best read as a cost \emph{lower bound} and a proving-context artefact,
+not a deployable contract.
+
+\subsection{The deployable looped NTT}\label{sec:looped}
+To fit the cap we express the identical transform---same twiddle table, same Cooley--Tukey
+structure as \eqref{eq:butterfly}, hence \emph{bit-for-bit} equal to the unrolled output (asserted
+coefficient-by-coefficient in the test suite)---as a compact loop of a few kilobytes. A naive loop
+costs as much as published looped verifiers ($\sim$66\,M Sierra gas); three choices recover most of
+the gap:
+\begin{enumerate}
+\item \textbf{\texttt{u64} end-to-end.} The working buffer is \texttt{Array<u64>}, so a butterfly
+never pays a field conversion; the only \texttt{felt252}$\leftrightarrow$\texttt{u64} casts are one
+pass at load and one at output.
+\item \textbf{Nested block/index loops.} Iterating blocks then offsets removes the per-element
+division that a flat index loop needs to recover the block and twiddle indices---replacing
+range-checked \texttt{div\_rem} with plain additions.
+\item \textbf{Additive-growth lazy reduction.} Only the product $t=(\zeta x)\bmod q$ is reduced per
+butterfly; the outputs $x{+}t$ and $x{+}q{-}t$ accumulate \emph{unreduced}. Each layer then grows
+the bound by at most $+q$ (additively, not $\times q$), so after $9$ layers values stay below
+$10q<2^{17}$---never overflowing \texttt{u64}, always non-negative---and a \emph{single} final
+$\bmod\,q$ canonicalises. This trades $9$ full reduction passes for one, while keeping exactly one
+\texttt{div\_rem} per butterfly.
+\end{enumerate}
+Because Cairo arrays are append-only, each layer reads the previous layer's \texttt{Span} and
+appends the next in index order (a per-block bottoms buffer preserves order in a single pass). Only
+the $512$-entry \texttt{u64} twiddle table is generated (\verb|--zetas| mode); the loop body is
+hand-written. The result, \texttt{ntt\_512\_looped}, is $34.4$\,M Sierra gas---roughly half a
+baseline looped NTT---and, being small, \emph{declares and deploys}.
 
 \subsection{Hash choice}
 Hash-to-point dominates cost. Measured per Keccak-$f[1600]$ permutation in pure Cairo versus
@@ -381,21 +422,62 @@ bit-tricks dear, so lazy reduction over $\Rq$ is the right lever instead.
 
 % ===========================================================================
 \section{Measured results}
+Measured under scarb 2.18 / starknet-foundry 0.59 / universal-sierra-compiler 2.9. Two metrics
+appear below and \emph{must not be conflated}: Cairo \emph{steps} (reported by \texttt{scarb
+execute}, the modern replacement for \texttt{scarb cairo-run}) and \emph{Sierra gas} (reported by
+\texttt{snforge}, the unit Starknet actually bills). The step figures are the ones comparable to
+published Falcon-on-Starknet step counts.
+
+\paragraph{Single transform.}
+\begin{center}
+\begin{tabular}{lrc}
+\toprule
+$\NTT$-512 & Sierra gas & deployable \\
+\midrule
+unrolled (felt252, lazy reduce) & $6.5$\,M & no ($3.74\times$ over cap) \\
+looped (this work, \S\ref{sec:looped}) & $34.4$\,M & \textbf{yes} \\
+baseline looped (reference point) & $\sim$65.8\,M & yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Full verify on a real fn-dsa signature} (two forward NTTs $+$ hint/norm core; base-$q$
+unpacking included; hash-to-point excluded from this entrypoint).
+\begin{center}
+\begin{tabular}{lrrc}
+\toprule
+path & steps & Sierra gas & deployable \\
+\midrule
+unrolled (\texttt{scarb execute}) & 233{,}488 & --- & no \\
+looped (\texttt{scarb execute}) & 717{,}820 & --- & \textbf{yes} \\
+looped, deployed (\texttt{snforge}) & --- & 94.1\,M & \textbf{yes} \\
+\bottomrule
+\end{tabular}
+\end{center}
+The \texttt{snforge} row is a genuine on-chain measurement: the \texttt{FalconVerifier} contract is
+declared, deployed, and invoked, and it accepts the signature.
+
+\paragraph{Auxiliary costs.}
 \begin{center}
 \begin{tabular}{lrr}
 \toprule
-Component (Falcon-512) & steps & L2 gas \\
+Component (Falcon-512) & steps & Sierra gas \\
 \midrule
-$\Zq$ op & $\sim$60 & $\sim$40k \\
-Unrolled $\NTT$-512 (felt252, lazy reduce) & 57{,}005 & 17.2\,M \\
-SHAKE-256 hash-to-point (pure Cairo) & 3{,}727{,}918 & 534\,M \\
-Hint-based verify (two NTTs $+$ norm, cairo-run) & 143{,}557 & --- \\
-Direct-NTT verify (looped port) & 1{,}094{,}283 & 125.8\,M \\
+$\Zq$ op & $\sim$60 & $\sim$14k \\
+SHAKE-256 hash-to-point (pure Cairo) & 3{,}727{,}918 & 504\,M \\
+Poseidon / Blake2s / keccak-builtin hash-to-point & --- & $\sim$5--10\,M \\
 Norm acceptance bound $\lfloor\beta^2\rfloor$ & \multicolumn{2}{r}{$34{,}034{,}726$} \\
 \bottomrule
 \end{tabular}
 \end{center}
-The unrolled/hint path fits a transaction budget; the looped/direct path is audit-friendly but
-exceeds it---quantifying the trade the design must make.
+
+\paragraph{Reading the numbers.} On raw compute the unrolled transform wins decisively---233\,k
+steps for the full verify, well under published $\sim$665\,k-step figures---but it is not
+deployable, being $3.74\times$ over the class-size cap (\S\ref{sec:deploy}). The looped verifier
+\emph{is} deployable and lands at 718\,k steps, on par with those figures while running as a real
+contract. Hash-to-point in standard SHAKE-256 remains the dominant term and the true frontier: a
+builtin-hash variant is $\sim$50--100$\times$ cheaper but non-interoperable, and a
+\texttt{keccak\_f1600} syscall (SNIP-32) would let the interoperable hash fit alongside the looped
+NTT.
 
 \end{document}

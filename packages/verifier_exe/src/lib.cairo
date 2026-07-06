@@ -7,6 +7,8 @@
 use falcon::verify::{verify_hint_512_packed, verify_hint_512_packed_looped};
 
 /// Unrolled NTT — cheap in steps but NOT deployable (over the class-size cap).
+/// Run: `scarb execute --executable-name verify_unrolled --print-resource-usage`
+#[executable]
 fn main(
     s2: Array<felt252>,
     pk_ntt: Array<felt252>,
@@ -16,8 +18,10 @@ fn main(
     verify_hint_512_packed(s2.span(), pk_ntt.span(), mul_hint.span(), msg_point.span())
 }
 
-/// Looped NTT — deployable (fits the cap). Same result. Measured in steps here
-/// to compare apples-to-apples with published step counts.
+/// Looped NTT — deployable (fits the cap). Same result. Measured in Cairo STEPS
+/// here to compare apples-to-apples with published step counts.
+/// Run: `scarb execute --executable-name verify_looped --print-resource-usage`
+#[executable]
 fn main_looped(
     s2: Array<felt252>,
     pk_ntt: Array<felt252>,

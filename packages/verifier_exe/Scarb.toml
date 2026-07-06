@@ -5,6 +5,17 @@ edition = "2024_07"
 
 [dependencies]
 falcon = { path = "../falcon" }
+cairo_execute = "2.18.0"
+
+# Two executable targets: the fast-but-undeployable unrolled verifier and the
+# deployable looped one. Run with `scarb execute --executable-name <name>`.
+[[target.executable]]
+name = "verify_unrolled"
+function = "verifier_exe::main"
+
+[[target.executable]]
+name = "verify_looped"
+function = "verifier_exe::main_looped"
 
 [cairo]
 enable-gas = false

@@ -5,3 +5,6 @@
 .snfoundry_cache/
 # misc
 .DS_Store
+
+# generated executable arguments
+packages/verifier_exe/args_*.json
