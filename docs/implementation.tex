@@ -484,8 +484,10 @@ $7{,}579{,}101$ steps ($611{,}389$ range-check) --- the extra $\sim$2.9\,M steps
 \texttt{verify\_full} being the SHAKE absorb of the public key --- and its class still fits the
 size cap. That it accepts is itself the proof that the on-chain hpk matches the reference exactly.
 This entrypoint is also deployed on Sepolia (contract
-\texttt{0x03de02703c...ba1bfcd}, class \texttt{0x1df4740e...53d37fc01}) and a read-call returns
-\texttt{true} on the real signature.
+\texttt{0x03de02703c...ba1bfcd}, class \texttt{0x1df4740e...53d37fc01}) and was invoked in a real
+transaction that \emph{accepted} the signature at $1{,}069{,}022{,}400$ L2 gas ($\sim$30 STRK) ---
+just under Starknet's $\sim$1.21\,B per-transaction gas cap. So even the fully self-contained,
+zero-off-chain-hash-trust standard Falcon-512 verifier runs as an ordinary on-chain transaction.
 
 \paragraph{Auxiliary costs.}
 \begin{center}

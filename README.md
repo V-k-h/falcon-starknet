@@ -24,9 +24,10 @@ A **fully self-contained, interoperable standard Falcon-512 verifier** is deploy
 |---|---|
 | Contract (zero off-chain hash trust) | [`0x03de02703ccabfdb75b69f2a3614d870c919e4d2effea9a2d5de42678ba1bfcd`](https://sepolia.voyager.online/contract/0x03de02703ccabfdb75b69f2a3614d870c919e4d2effea9a2d5de42678ba1bfcd) |
 | Class hash | [`0x1df4740eee2a48027614123bf0d561d19d851b3a854b455d61789853d37fc01`](https://sepolia.voyager.online/class/0x01df4740eee2a48027614123bf0d561d19d851b3a854b455d61789853d37fc01) |
-| Cost | **7,579,101 steps** (`scarb execute`); the +2.9M over `verify_full` is the SHAKE absorb of the 897-byte public key |
+| `verify_from_pk(...) -> true` — invoke tx | [`0x055614c8...b624d0d4`](https://sepolia.voyager.online/tx/0x055614c84bce1a3b70bc3ef7f83ad193d80862a0e3ca8d40940f44bcb624d0d4) |
+| Cost of that tx | **1,069,022,400 L2 gas** (~30 STRK); 7,579,101 steps — the +2.9M over `verify_full` is the SHAKE absorb of the 897-byte public key |
 
-That it accepts is itself the proof that the on-chain `hpk` matches the reference bit-for-bit.
+That it accepts is itself the proof that the on-chain `hpk` matches the reference bit-for-bit. At ~1.07B L2 gas it sits just under Starknet's ~1.21B per-transaction gas cap.
 
 The NTT uses `ntt_512_looped` (compact looped transform). The fully-unrolled NTT is ~10× cheaper per transform but its ~306k-felt class is ~3.7× over Starknet's contract class-size cap, so it cannot be declared. See [docs/implementation.tex](docs/implementation.tex) §Deployability.
 
