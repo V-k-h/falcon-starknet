@@ -42,6 +42,20 @@ pub trait IFalconVerifier<TContractState> {
         pk_ntt: Array<felt252>,
         mul_hint: Array<felt252>,
     ) -> bool;
+
+    /// State-changing gate: verifies fully on-chain from the RAW public key and
+    /// REVERTS if the signature is invalid, emitting `Verified` on success. A
+    /// SUCCEEDED transaction to this entrypoint IS proof the signature is valid;
+    /// a bad signature yields a reverted transaction.
+    fn assert_verify_from_pk(
+        ref self: TContractState,
+        vrfy_key: Array<u8>,
+        nonce: Array<u8>,
+        message: Array<u8>,
+        s2: Array<felt252>,
+        pk_ntt: Array<felt252>,
+        mul_hint: Array<felt252>,
+    );
 }
 
 #[starknet::contract]
@@ -50,6 +64,18 @@ pub mod FalconVerifier {
 
     #[storage]
     struct Storage {}
+
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        Verified: Verified,
+    }
+
+    /// Emitted only after a signature passes (the assert above it reverts otherwise).
+    #[derive(Drop, starknet::Event)]
+    struct Verified {
+        ok: bool,
+    }
 
     #[abi(embed_v0)]
     impl FalconVerifierImpl of super::IFalconVerifier<ContractState> {
@@ -85,6 +111,22 @@ pub mod FalconVerifier {
             verify_full_from_pk(
                 vrfy_key, nonce, message, s2.span(), pk_ntt.span(), mul_hint.span(),
             )
+        }
+
+        fn assert_verify_from_pk(
+            ref self: ContractState,
+            vrfy_key: Array<u8>,
+            nonce: Array<u8>,
+            message: Array<u8>,
+            s2: Array<felt252>,
+            pk_ntt: Array<felt252>,
+            mul_hint: Array<felt252>,
+        ) {
+            let ok = verify_full_from_pk(
+                vrfy_key, nonce, message, s2.span(), pk_ntt.span(), mul_hint.span(),
+            );
+            assert!(ok, "invalid Falcon-512 signature");
+            self.emit(Verified { ok });
         }
     }
 }

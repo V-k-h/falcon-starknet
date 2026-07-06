@@ -29,6 +29,8 @@ A **fully self-contained, interoperable standard Falcon-512 verifier** is deploy
 
 That it accepts is itself the proof that the on-chain `hpk` matches the reference bit-for-bit. At ~1.07B L2 gas it sits just under Starknet's ~1.21B per-transaction gas cap.
 
+**A passing transaction as the proof.** `assert_verify_from_pk(...)` runs the same full verify but **reverts on an invalid signature** and emits `Verified` on success — so a SUCCEEDED transaction *is* the proof of validity. Deployed as a gate contract [`0x07110d6e...056240`](https://sepolia.voyager.online/contract/0x07110d6eaabc20f6713cf0b32dccfaf0ee9d24b0b94034e8ac0871709b056240); valid-signature tx [`0x0332bef4...`](https://sepolia.voyager.online/tx/0x0332bef426e248cd4a3030f487dd7a0fc5c611e75a9a02df3ea3ab5ba9786569) SUCCEEDED and emitted `Verified{ok: true}` (1.07B L2 gas). A tampered signature makes the same verify return `false`, so the transaction reverts.
+
 The NTT uses `ntt_512_looped` (compact looped transform). The fully-unrolled NTT is ~10× cheaper per transform but its ~306k-felt class is ~3.7× over Starknet's contract class-size cap, so it cannot be declared. See [docs/implementation.tex](docs/implementation.tex) §Deployability.
 
 ## Design decisions (why)
