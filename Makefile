@@ -16,7 +16,11 @@ bench:
 gen-vectors:
 	cd reference && cargo run --bin gen-vectors
 
-# Regenerate the unrolled NTT (n=512) from the codegen
+# Regenerate the unrolled NTT (n=512) from the codegen. The default (tuple) emit
+# is ~12% cheaper in gas (6.51M vs 7.29M L2). Add `--layered` to emit one function
+# per NTT layer (threaded via Array<felt252>) for smaller per-frame offsets; note
+# this does NOT make the verifier deployable — the unrolled ntt_512 is ~3.7x over
+# Starknet's contract class-size cap regardless (see packages/verifier_contract).
 ntt:
 	cargo run -p falcon-codegen --bin cairo-gen -- 512 packages/falcon/src/ntt512.cairo
 

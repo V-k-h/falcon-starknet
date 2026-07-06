@@ -107,6 +107,47 @@ mod tests {
         let c = build_ntt_fast_circuit(512);
         assert!(c.ops.len() < 40_000, "n=512 ops = {} (should be ~n log n)", c.ops.len());
     }
+
+    #[test]
+    fn layered_circuit_matches_ref_and_snapshots_are_clean() {
+        use crate::ntt::{build_ntt_fast_circuit_layered, ntt_fast_ref};
+        for &n in &[4usize, 8, 16, 32, 64, 128, 256, 512] {
+            let (c, snaps) = build_ntt_fast_circuit_layered(n);
+            let logn = n.trailing_zeros() as usize;
+            assert_eq!(snaps.len(), logn + 1, "n={}: one snapshot per layer + input", n);
+            for s in &snaps {
+                assert_eq!(s.len(), n, "n={}: every snapshot holds n live ids", n);
+            }
+            // Circuit fidelity (same construction as the flat build).
+            let input: Vec<i128> = (0..n as i128).map(|i| (i * 41 + 7) % Q).collect();
+            assert_eq!(c.simulate(&input), ntt_fast_ref(&input), "layered fidelity n={}", n);
+
+            // The crucial layered invariant: every op strictly between two
+            // consecutive snapshots references ONLY that chunk's input ids,
+            // constants, or a within-chunk op — never a value from an older
+            // chunk. This is what makes each chunk a self-contained function.
+            for k in 0..snaps.len() - 1 {
+                let ins: std::collections::HashSet<usize> = snaps[k].iter().copied().collect();
+                let start = *snaps[k].iter().max().unwrap();
+                let end = *snaps[k + 1].iter().max().unwrap();
+                for id in (start + 1)..=end {
+                    let op = &c.ops[id];
+                    for &operand in &[op.a, op.b] {
+                        if op.kind == crate::circuit::OpKind::Reduce && operand == op.b {
+                            continue; // b unused for Reduce
+                        }
+                        if matches!(op.kind, crate::circuit::OpKind::Input | crate::circuit::OpKind::Const) {
+                            continue; // leaves have no operands
+                        }
+                        let ok = ins.contains(&operand)
+                            || matches!(c.ops[operand].kind, crate::circuit::OpKind::Const)
+                            || (operand > start && operand <= end);
+                        assert!(ok, "n={} chunk {}: op {} refs out-of-chunk id {}", n, k, id, operand);
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -181,6 +181,47 @@ pub fn build_ntt_fast_circuit(n: usize) -> Circuit {
     c
 }
 
+/// Same fast NTT, but ALSO records the 512 live SSA ids at every layer boundary.
+///
+/// The returned `snapshots` has `logn + 1` entries: snapshots[0] = inputs, and
+/// snapshots[L] = the coefficient ids after layer L (post-reduction, if any).
+/// Between two consecutive snapshots the ONLY live values are those 512 ids —
+/// CT butterflies read only the immediately-preceding layer — so each layer can
+/// be emitted as an independent `Span<felt252> -> Array<felt252>` function whose
+/// frame holds ~one layer of ops, keeping every USC offset well under its limit.
+pub fn build_ntt_fast_circuit_layered(n: usize) -> (Circuit, Vec<Vec<usize>>) {
+    let z = zetas(n);
+    let mut c = Circuit::new(Q);
+    let mut x: Vec<usize> = (0..n).map(|_| c.input(0, Q - 1)).collect();
+
+    let mut snapshots: Vec<Vec<usize>> = vec![x.clone()];
+    let mut k = 1usize;
+    let mut len = n / 2;
+    let mut layer = 0usize;
+    while len >= 1 {
+        while_layer(&mut c, &z, &mut k, &mut x, len, n);
+        layer += 1;
+        len /= 2;
+        if layer % REDUCE_EVERY == 0 {
+            for i in 0..n {
+                x[i] = c.reduce(x[i]);
+            }
+        }
+        snapshots.push(x.clone());
+    }
+    if layer % REDUCE_EVERY != 0 {
+        for i in 0..n {
+            x[i] = c.reduce(x[i]);
+        }
+        // fold the final reduction into the last snapshot
+        *snapshots.last_mut().unwrap() = x.clone();
+    }
+    for &v in &x {
+        c.set_output(v);
+    }
+    (c, snapshots)
+}
+
 /// One CT layer of butterflies (no reduction; SHIFT keeps values non-negative).
 fn while_layer(c: &mut Circuit, z: &[i128], k: &mut usize, x: &mut [usize], len: usize, n: usize) {
     let mut start = 0;
