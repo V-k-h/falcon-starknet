@@ -6,5 +6,15 @@ edition = "2024_07"
 [dependencies]
 falcon = { path = "../falcon" }
 
-[cairo]
-enable-gas = false
+[dev-dependencies]
+snforge_std = "0.48.1"
+assert_macros = "2.12.1"
+
+[[target.starknet-contract]]
+sierra = true
+
+[scripts]
+test = "snforge test"
+
+[tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]

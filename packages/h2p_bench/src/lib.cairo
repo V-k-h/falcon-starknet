@@ -13,11 +13,41 @@
 
 use core::blake::blake2s_finalize;
 use core::poseidon::hades_permutation;
+use core::keccak::keccak_u256s_le_inputs;
 use falcon::hash_to_point::hash_to_point;
 
 const FIVE_Q: u32 = 61445; // 5q — rejection threshold
 const Q32: u32 = 12289;
 const Q128: u128 = 12289;
+
+// ------------------------------------------------- Keccak-256 builtin (XOF mode)
+// NOTE: the keccak builtin is keccak-256, NOT spec SHAKE (different padding, no
+// multi-block squeeze). Used here in counter mode as a Keccak-family COST proxy
+// via the builtin — i.e. what SHAKE would cost if a keccak_f1600 syscall existed.
+fn take_u128(mut v: u128, ref out: Array<felt252>) {
+    let mut k: u32 = 0;
+    while k != 8 && out.len() != 512 {
+        let w = v % 65536;
+        v = v / 65536;
+        if w < 61445 {
+            out.append((w % Q128).into());
+        }
+        k += 1;
+    }
+}
+
+pub fn h2p_keccak_builtin() -> Array<felt252> {
+    let mut out: Array<felt252> = array![];
+    let mut i: u256 = 0;
+    let seed: u256 = 0x0001020304050607_08090a0b0c0d0e0f_1011121314151617_18191a1b1c1d1e1f;
+    while out.len() != 512 {
+        let h = keccak_u256s_le_inputs(array![seed, i].span()); // u256 = keccak256(seed||i)
+        take_u128(h.low, ref out);
+        take_u128(h.high, ref out);
+        i += 1;
+    }
+    out
+}
 
 // ----------------------------------------------------------------- Blake2s XOF
 // Standard Blake2s-256 initial state (IV with param 0x01010020 folded into s0).
@@ -112,6 +142,10 @@ fn checksum(coeffs: Array<felt252>) -> felt252 {
 
 pub fn h2p_blake2_run() -> felt252 {
     checksum(h2p_blake2())
+}
+
+pub fn h2p_keccak_builtin_run() -> felt252 {
+    checksum(h2p_keccak_builtin())
 }
 
 pub fn h2p_poseidon_run() -> felt252 {
