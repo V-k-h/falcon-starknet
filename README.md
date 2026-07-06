@@ -4,6 +4,18 @@ Standard **Falcon-512** (NIST FN-DSA) post-quantum signature **verification** fo
 
 Signing/keygen stay off-chain (they need floating point); only verification runs on-chain, where it's integer-only: NTT mod `q = 12289`, a hash-to-point, and an L2-norm check.
 
+## Live on Starknet Sepolia
+
+The looped-NTT verifier is deployed and **verified a real fn-dsa Falcon-512 signature on-chain** (`verify(...) -> true`):
+
+| | value |
+|---|---|
+| Contract | [`0x07e50414eeafc7988169e5e50788878a17f79b98715fe574a95d4833ebfed412`](https://sepolia.voyager.online/contract/0x07e50414eeafc7988169e5e50788878a17f79b98715fe574a95d4833ebfed412) |
+| Class hash | [`0x6460b617f042452543962baecfd42165999171677e91cbb9dc381e60decb81e`](https://sepolia.voyager.online/class/0x06460b617f042452543962baecfd42165999171677e91cbb9dc381e60decb81e) |
+| Entrypoint | `verify(s2, pk_ntt, mul_hint, msg_point)` — two forward NTTs + hint/norm core |
+
+The deployable path uses `verify_hint_512_looped` (compact looped NTT). The fully-unrolled NTT is ~10× cheaper per transform but its ~306k-felt class is ~3.7× over Starknet's contract class-size cap, so it cannot be declared. See [docs/implementation.tex](docs/implementation.tex) §Deployability.
+
 ## Design decisions (why)
 
 - **Standard SHAKE256, not Poseidon.** The Poseidon variant (s2morrow) is ~50× cheaper on-chain but non-standard — it can't verify real Falcon signatures. We target interoperability. Hash-to-point is behind a trait so a Poseidon backend can be benchmarked side-by-side.

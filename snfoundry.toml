@@ -1,0 +1,6 @@
+# Starknet Sepolia deployment config for the Falcon-512 verifier.
+# Uses a free public RPC (Cartridge) at spec 0.10.x and the locally-created
+# `falcon_deployer` Ready account. Deploy with `--profile sepolia`.
+[sncast.sepolia]
+url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_10"
+account = "falcon_deployer"
