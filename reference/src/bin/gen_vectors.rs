@@ -144,6 +144,33 @@ fn main() {
     std::fs::write(ap, args).expect("write args");
     eprintln!("[e2e] wrote {ap}");
 
+    // ---- pq-verifiers fixture: base-Q pack (18 coeffs/felt) -> 29 felts each ----
+    // Direct-NTT encoding: public_key = pack(h) [29], signature = pack(s2) ++ pack(msg_point) [58].
+    use num_bigint::BigUint;
+    let pack = |vals: &[i128]| -> Vec<String> {
+        let q = BigUint::from(12289u32);
+        let mut felts = Vec::new();
+        for chunk in vals.chunks(18) {
+            let mut acc = BigUint::from(0u32);
+            for &v in chunk.iter().rev() {
+                acc = &acc * &q + BigUint::from(v as u64);
+            }
+            felts.push(acc.to_str_radix(10));
+        }
+        felts
+    };
+    let h_i: Vec<i128> = h.iter().map(|&x| x as i128).collect();
+    let pk_felts = pack(&h_i);
+    let mut sig_felts = pack(&s2_stored);
+    sig_felts.extend(pack(&c));
+    let fixture = format!(
+        "// pubkey ({} felts) = base-Q pack(h);  signature ({} felts) = pack(s2) ++ pack(msg_point)\nPUBKEY: [{}]\nSIG: [{}]\n",
+        pk_felts.len(), sig_felts.len(), pk_felts.join(", "), sig_felts.join(", "),
+    );
+    let fp = "../packages/falcon/tests/data/pqbench_fixture.txt";
+    std::fs::write(fp, &fixture).expect("write fixture");
+    eprintln!("[e2e] wrote {fp}  (pubkey {} felts, signature {} felts)", pk_felts.len(), sig_felts.len());
+
     let kat = VerifyKat {
         scheme: "Falcon-512 / FN-DSA (SHAKE256, DOMAIN_NONE, HASH_ID_RAW)".to_string(),
         logn: 9,
