@@ -23,5 +23,10 @@ function = "verifier_exe::main_looped"
 name = "verify_full_shake"
 function = "verifier_exe::main_full_shake"
 
+# Fully self-contained from the raw public key: computes hpk = SHAKE256(pk) too.
+[[target.executable]]
+name = "verify_full_pk"
+function = "verifier_exe::main_full_from_pk"
+
 [cairo]
 enable-gas = false

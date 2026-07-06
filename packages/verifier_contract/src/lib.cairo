@@ -29,11 +29,24 @@ pub trait IFalconVerifier<TContractState> {
         pk_ntt: Array<felt252>,
         mul_hint: Array<felt252>,
     ) -> bool;
+
+    /// Fully self-contained from the RAW public key: computes hpk =
+    /// SHAKE256(vrfy_key)[0:64] on-chain, builds the framed input, hashes to the
+    /// challenge, and verifies. Nothing hash-related is trusted from off-chain.
+    fn verify_from_pk(
+        self: @TContractState,
+        vrfy_key: Array<u8>,
+        nonce: Array<u8>,
+        message: Array<u8>,
+        s2: Array<felt252>,
+        pk_ntt: Array<felt252>,
+        mul_hint: Array<felt252>,
+    ) -> bool;
 }
 
 #[starknet::contract]
 pub mod FalconVerifier {
-    use falcon::verify::{verify_hint_512_looped, verify_full_shake};
+    use falcon::verify::{verify_hint_512_looped, verify_full_shake, verify_full_from_pk};
 
     #[storage]
     struct Storage {}
@@ -58,6 +71,20 @@ pub mod FalconVerifier {
             mul_hint: Array<felt252>,
         ) -> bool {
             verify_full_shake(framed, s2.span(), pk_ntt.span(), mul_hint.span())
+        }
+
+        fn verify_from_pk(
+            self: @ContractState,
+            vrfy_key: Array<u8>,
+            nonce: Array<u8>,
+            message: Array<u8>,
+            s2: Array<felt252>,
+            pk_ntt: Array<felt252>,
+            mul_hint: Array<felt252>,
+        ) -> bool {
+            verify_full_from_pk(
+                vrfy_key, nonce, message, s2.span(), pk_ntt.span(), mul_hint.span(),
+            )
         }
     }
 }

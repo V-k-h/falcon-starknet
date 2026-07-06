@@ -16,6 +16,7 @@ use crate::ntt_looped::ntt_512_looped;
 use crate::ntt_generated::ntt_4;
 use crate::packing::unpack_512;
 use crate::hash_to_point::hash_to_point;
+use crate::shake256::shake256_lanes;
 
 const Q: u64 = 12289;
 const HALF_Q: u64 = 6144; // ⌊q/2⌋
@@ -118,6 +119,60 @@ pub fn verify_full_shake(
         i += 1;
     }
     verify_hint_512_looped(s2, pk_ntt, mul_hint, msg_point.span())
+}
+
+/// Rebuild the FN-DSA hash-to-point input entirely on-chain from the RAW public
+/// key, computing hpk = SHAKE256(vrfy_key)[0..64] here (no off-chain precompute):
+///   framed = nonce ‖ hpk ‖ 0x00 ‖ 0x00 ‖ message.
+/// The 64 hpk bytes are the first 8 SHAKE lanes, little-endian per lane — exactly
+/// the byte order the reference's XOF reader produces.
+pub fn build_framed(
+    vrfy_key: Array<u8>, nonce: Array<u8>, message: Array<u8>,
+) -> Array<u8> {
+    let hpk = shake256_lanes(vrfy_key, 8); // 8 lanes = 64 bytes
+
+    let mut framed: Array<u8> = array![];
+    let mut i: u32 = 0;
+    while i != nonce.len() {
+        framed.append(*nonce.at(i));
+        i += 1;
+    }
+    // hpk lanes -> little-endian bytes
+    let mut li: u32 = 0;
+    while li != 8 {
+        let mut lane: u64 = *hpk.at(li);
+        let mut bpos: u32 = 0;
+        while bpos != 8 {
+            framed.append((lane % 256).try_into().unwrap());
+            lane = lane / 256;
+            bpos += 1;
+        }
+        li += 1;
+    }
+    framed.append(0); // DOMAIN_NONE
+    framed.append(0); // empty context length
+    let mut j: u32 = 0;
+    while j != message.len() {
+        framed.append(*message.at(j));
+        j += 1;
+    }
+    framed
+}
+
+/// Fully self-contained verify from the RAW public key: computes hpk on-chain
+/// (SHAKE256 over the encoded pubkey), builds the FN-DSA framed input, hashes it
+/// to the challenge (SHAKE256 hash-to-point), then runs the looped-NTT verify.
+/// Nothing hash-related is trusted from off-chain.
+pub fn verify_full_from_pk(
+    vrfy_key: Array<u8>,
+    nonce: Array<u8>,
+    message: Array<u8>,
+    s2: Span<felt252>,
+    pk_ntt: Span<felt252>,
+    mul_hint: Span<felt252>,
+) -> bool {
+    let framed = build_framed(vrfy_key, nonce, message);
+    verify_full_shake(framed, s2, pk_ntt, mul_hint)
 }
 
 /// Hint-based verify with base-Q packed inputs (29 felts each, ~17.66x smaller

@@ -4,7 +4,9 @@
 //!
 //! `main` takes base-Q PACKED inputs (4 x 29 = 116 felts, ~17.66x smaller than
 //! the 2048-felt unpacked form) and unpacks on-chain before verifying.
-use falcon::verify::{verify_hint_512_packed, verify_hint_512_packed_looped, verify_full_shake};
+use falcon::verify::{
+    verify_hint_512_packed, verify_hint_512_packed_looped, verify_full_shake, verify_full_from_pk,
+};
 
 /// Unrolled NTT — cheap in steps but NOT deployable (over the class-size cap).
 /// Run: `scarb execute --executable-name verify_unrolled --print-resource-usage`
@@ -44,4 +46,21 @@ fn main_full_shake(
     mul_hint: Array<felt252>,
 ) -> bool {
     verify_full_shake(framed, s2.span(), pk_ntt.span(), mul_hint.span())
+}
+
+/// Fully self-contained from the RAW public key: computes hpk = SHAKE256(pk)[0:64]
+/// on-chain, builds the framed input, hashes to the challenge, and verifies.
+/// Run: `scarb execute --executable-name verify_full_pk --print-resource-usage`
+#[executable]
+fn main_full_from_pk(
+    vrfy_key: Array<u8>,
+    nonce: Array<u8>,
+    message: Array<u8>,
+    s2: Array<felt252>,
+    pk_ntt: Array<felt252>,
+    mul_hint: Array<felt252>,
+) -> bool {
+    verify_full_from_pk(
+        vrfy_key, nonce, message, s2.span(), pk_ntt.span(), mul_hint.span(),
+    )
 }

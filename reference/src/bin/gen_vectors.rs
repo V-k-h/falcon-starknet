@@ -157,6 +157,24 @@ fn main() {
         .expect("write framed");
     eprintln!("[e2e] wrote {fjp}  ({} framed bytes)", framed.len());
 
+    // Raw inputs for the fully-self-contained verifier, which computes hpk =
+    // SHAKE256(vrfy_key)[0..64] on-chain: [vrfy_key, nonce, message] byte arrays.
+    let bytes_arr = |b: &[u8]| -> Vec<String> {
+        std::iter::once(b.len() as i128)
+            .chain(b.iter().map(|&x| x as i128))
+            .map(|v| v.to_string())
+            .collect()
+    };
+    let pk_inputs = format!(
+        "{{ \"vrfy_key\": [{}], \"nonce\": [{}], \"message\": [{}] }}\n",
+        bytes_arr(&vrfy_key).join(", "),
+        bytes_arr(&nonce).join(", "),
+        bytes_arr(message).join(", "),
+    );
+    let pkp = "../packages/falcon/tests/data/verify512_pk_inputs.json";
+    std::fs::write(pkp, pk_inputs).expect("write pk inputs");
+    eprintln!("[e2e] wrote {pkp}");
+
     // ---- pq-verifiers fixture: base-Q pack (18 coeffs/felt) -> 29 felts each ----
     // Direct-NTT encoding: public_key = pack(h) [29], signature = pack(s2) ++ pack(msg_point) [58].
     use num_bigint::BigUint;

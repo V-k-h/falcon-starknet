@@ -477,6 +477,13 @@ The class fits the contract size cap and the transaction fits per-transaction ex
 a fully interoperable standard Falcon-512 verifier \emph{is deployable and live today}. Cost is
 dominated by the pure-Cairo SHAKE ($\sim$3.7\,M of the $\sim$4.7\,M steps).
 
+\paragraph{Zero off-chain hash trust.} \texttt{verify\_from\_pk} goes one step further and computes
+$\text{hpk}=\text{SHAKE256}(\text{vrfy\_key})[0{:}64]$ on-chain from the raw 897-byte encoded public
+key, so no hash input is precomputed off-chain at all. It accepts the real signature at
+$7{,}579{,}101$ steps ($611{,}389$ range-check) --- the extra $\sim$2.9\,M steps over
+\texttt{verify\_full} being the SHAKE absorb of the public key --- and its class still fits the
+size cap. That it accepts is itself the proof that the on-chain hpk matches the reference exactly.
+
 \paragraph{Auxiliary costs.}
 \begin{center}
 \begin{tabular}{lrr}

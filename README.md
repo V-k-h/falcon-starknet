@@ -18,6 +18,8 @@ A **fully self-contained, interoperable standard Falcon-512 verifier** is deploy
 
 `verify_full` computes `msg_point = HashToPoint(nonce ‖ SHAKE256(pk)[0..64] ‖ 0x00 ‖ 0x00 ‖ message)` on-chain with interoperable SHAKE-256 — so it verifies *real* Falcon signatures, no trusted pre-hash. Cost is dominated by the pure-Cairo SHAKE (~3.7M of the ~4.7M steps); a `keccak_f1600` syscall (SNIP-32) would cut it sharply.
 
+**No trust at all in the hash inputs:** `verify_from_pk(vrfy_key, nonce, message, s2, pk_ntt, mul_hint)` additionally computes `hpk = SHAKE256(vrfy_key)[0..64]` on-chain from the raw encoded public key, so *nothing* hash-related is precomputed off-chain. Proven end-to-end (`scarb execute` → accepts, **7,579,101 steps**) and fits the class-size cap. Its live Sepolia declare is pending a testnet-STRK top-up (the larger class costs more to declare).
+
 The NTT uses `ntt_512_looped` (compact looped transform). The fully-unrolled NTT is ~10× cheaper per transform but its ~306k-felt class is ~3.7× over Starknet's contract class-size cap, so it cannot be declared. See [docs/implementation.tex](docs/implementation.tex) §Deployability.
 
 ## Design decisions (why)
