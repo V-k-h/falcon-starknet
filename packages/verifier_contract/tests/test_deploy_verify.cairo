@@ -25,12 +25,10 @@ fn deploy() -> IFalconVerifierDispatcher {
     IFalconVerifierDispatcher { contract_address: addr }
 }
 
-// IGNORED: this contract CANNOT be declared/deployed — the fully-unrolled
-// ntt_512 makes the class ~3.74x larger than Starknet's 81,920-felt max contract
-// class size (see the size lines from `scarb build` on this package), and USC
-// throws ApChangeError/OffsetOverflow on the contract path. Kept as the harness
-// that would measure deploy-path gas once the NTT is de-unrolled to fit the cap.
-#[ignore]
+// Real deploy-path measurement: the contract uses the LOOPED NTT, which fits
+// Starknet's contract class-size cap. Declares + deploys FalconVerifier and
+// invokes `verify` (both forward NTTs + hint/norm core) on a real fn-dsa
+// Falcon-512 signature. The reported l2_gas is the true on-chain verify cost.
 #[test]
 fn deploy_and_full_verify_real_signature() {
     let file = FileTrait::new("tests/data/verify512_kat.json");

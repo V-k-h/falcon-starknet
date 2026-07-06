@@ -1,19 +1,17 @@
-//! On-chain Falcon-512 verifier contract — and a code-SIZE probe.
+//! On-chain Falcon-512 verifier contract.
 //!
-//! A contract class's Sierra includes ONLY functions reachable from its
-//! entrypoints, so this wraps `verify_hint_512` (both forward NTTs + hint/norm
-//! core) WITHOUT the pure-Cairo SHAKE256. Even so, the FULLY UNROLLED ntt_512
-//! makes the class ~3.7x larger than Starknet's max contract class size — see
-//! the size lines printed by `scarb build`. That is the decisive result: the
-//! unrolled NTT is cheap in raw VM gas but NOT deployable as a contract; a
-//! looped/partially-unrolled NTT is required to fit the code-size cap.
+//! Uses `verify_hint_512_looped` — the compact looped NTT — so the whole
+//! contract class fits Starknet's max contract class size. (The fully-unrolled
+//! `ntt_512` is ~10x cheaper per transform but its ~300K-felt body is ~3.7x over
+//! the cap and cannot be declared; the looped NTT is bit-for-bit identical and
+//! deployable.) A contract class's Sierra includes only functions reachable from
+//! its entrypoints, so the pure-Cairo SHAKE256 hash-to-point is NOT pulled in.
 //!
-//! `ntt_once` isolates a single ntt_512 body so `scarb build` reports the code
-//! size of ONE unrolled transform against the 81,920-felt cap.
+//! `verify` takes four 512-coefficient polynomials in [0, q); both forward NTTs
+//! and the hint/norm core run on-chain.
 
 #[starknet::interface]
 pub trait IFalconVerifier<TContractState> {
-    /// Full verify: both forward NTTs (unrolled) + hint/norm core.
     fn verify(
         self: @TContractState,
         s2: Array<felt252>,
@@ -21,15 +19,11 @@ pub trait IFalconVerifier<TContractState> {
         mul_hint: Array<felt252>,
         msg_point: Array<felt252>,
     ) -> bool;
-
-    /// Size probe: one unrolled ntt_512 (returns coefficient 0).
-    fn ntt_once(self: @TContractState, input: Array<felt252>) -> felt252;
 }
 
 #[starknet::contract]
 pub mod FalconVerifier {
-    use falcon::verify::verify_hint_512;
-    use falcon::ntt512::ntt_512;
+    use falcon::verify::verify_hint_512_looped;
 
     #[storage]
     struct Storage {}
@@ -43,12 +37,7 @@ pub mod FalconVerifier {
             mul_hint: Array<felt252>,
             msg_point: Array<felt252>,
         ) -> bool {
-            verify_hint_512(s2.span(), pk_ntt.span(), mul_hint.span(), msg_point.span())
-        }
-
-        fn ntt_once(self: @ContractState, input: Array<felt252>) -> felt252 {
-            let out = ntt_512(input.span());
-            *out.at(0)
+            verify_hint_512_looped(s2.span(), pk_ntt.span(), mul_hint.span(), msg_point.span())
         }
     }
 }

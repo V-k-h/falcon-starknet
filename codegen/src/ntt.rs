@@ -112,7 +112,10 @@ fn bitrev(mut i: usize, bits: u32) -> usize {
     r
 }
 
-fn zetas(n: usize) -> Vec<i128> {
+/// Twiddle table: z[i] = psi^bitrev(i) mod q. Same convention as `ntt_fast_ref`
+/// and the unrolled circuit, so a looped NTT reading this table produces the
+/// identical transform. Public so the emitter can lay it out as a Cairo table.
+pub fn zetas(n: usize) -> Vec<i128> {
     let logn = n.trailing_zeros();
     let psi = psi_2n(n as i128);
     (0..n).map(|i| powmod(psi, bitrev(i, logn) as i128, Q)).collect()

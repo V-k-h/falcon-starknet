@@ -14,3 +14,5 @@ pub mod verify;
 
 pub mod ntt_generated;
 pub mod ntt512;
+pub mod ntt_zetas;
+pub mod ntt_looped;

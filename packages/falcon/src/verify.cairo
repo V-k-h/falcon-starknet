@@ -12,6 +12,7 @@
 //! resolved (M2-opt); decoding real fn-dsa signature/pubkey bytes is M4-decode.
 
 use crate::ntt512::ntt_512;
+use crate::ntt_looped::ntt_512_looped;
 use crate::ntt_generated::ntt_4;
 use crate::packing::unpack_512;
 
@@ -86,6 +87,18 @@ pub fn verify_hint_512(
     verify_core(s2, pk_ntt, mul_hint, msg_point, a.span(), b.span(), 512)
 }
 
+/// Hint-based verify, n=512, using the DEPLOYABLE looped NTT. Identical result
+/// to `verify_hint_512` (the looped NTT is bit-for-bit equal to the unrolled
+/// one) but its compact code fits Starknet's contract class-size cap, so this is
+/// the entrypoint a real on-chain verifier uses.
+pub fn verify_hint_512_looped(
+    s2: Span<felt252>, pk_ntt: Span<felt252>, mul_hint: Span<felt252>, msg_point: Span<felt252>,
+) -> bool {
+    let a = ntt_512_looped(s2);
+    let b = ntt_512_looped(mul_hint);
+    verify_core(s2, pk_ntt, mul_hint, msg_point, a.span(), b.span(), 512)
+}
+
 /// Hint-based verify with base-Q packed inputs (29 felts each, ~17.66x smaller
 /// calldata). Unpacks the four polynomials, then runs `verify_hint_512`. This
 /// trades L1 calldata (2048 -> 116 felts) for the on-chain unpack compute.
@@ -100,4 +113,19 @@ pub fn verify_hint_512_packed(
     let mul_hint = unpack_512(mul_hint_p);
     let msg_point = unpack_512(msg_point_p);
     verify_hint_512(s2.span(), pk_ntt.span(), mul_hint.span(), msg_point.span())
+}
+
+/// Same as `verify_hint_512_packed` but with the DEPLOYABLE looped NTT — this is
+/// the packed entrypoint measurable in Cairo STEPS via `scarb cairo-run`.
+pub fn verify_hint_512_packed_looped(
+    s2_p: Span<felt252>,
+    pk_ntt_p: Span<felt252>,
+    mul_hint_p: Span<felt252>,
+    msg_point_p: Span<felt252>,
+) -> bool {
+    let s2 = unpack_512(s2_p);
+    let pk_ntt = unpack_512(pk_ntt_p);
+    let mul_hint = unpack_512(mul_hint_p);
+    let msg_point = unpack_512(msg_point_p);
+    verify_hint_512_looped(s2.span(), pk_ntt.span(), mul_hint.span(), msg_point.span())
 }
