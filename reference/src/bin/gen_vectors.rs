@@ -167,8 +167,32 @@ fn main() {
         "// pubkey ({} felts) = base-Q pack(h);  signature ({} felts) = pack(s2) ++ pack(msg_point)\nPUBKEY: [{}]\nSIG: [{}]\n",
         pk_felts.len(), sig_felts.len(), pk_felts.join(", "), sig_felts.join(", "),
     );
-    // packed cairo-run args for the hint verifier: [[pack(s2)],[pack(pk_ntt)],[pack(mul)],[pack(c)]]
-    let pj = |a: &[i128]| format!("[{}]", pack(a).join(","));
+    // packed cairo-run args for the hint verifier, u128-halves layout
+    // (felt = lo + hi*2^128, 9 base-q coeffs per half) — matches unpack_512.
+    let pack_u128 = |vals: &[i128]| -> Vec<String> {
+        let two128 = BigUint::from(1u32) << 128;
+        let mut felts = Vec::new();
+        for chunk in vals.chunks(18) {
+            let half = |s: &[i128]| -> u128 {
+                let mut acc: u128 = 0;
+                for &v in s.iter().rev() {
+                    acc = acc * 12289 + v as u128;
+                }
+                acc
+            };
+            let lo = half(&chunk[..chunk.len().min(9)]);
+            let hi = if chunk.len() > 9 { half(&chunk[9..]) } else { 0 };
+            let felt: BigUint = BigUint::from(lo) + BigUint::from(hi) * &two128;
+            felts.push(felt.to_str_radix(10));
+        }
+        felts
+    };
+    // debug: pack a fixed vector [0,1,..,17] and print felt[0] to compare vs Python
+    {
+        let test: Vec<i128> = (0..18).collect();
+        eprintln!("[dbg] PACK_TEST felt0 = {}", pack_u128(&test)[0]);
+    }
+    let pj = |a: &[i128]| format!("[{}]", pack_u128(a).join(","));
     let packed_args = format!(
         "[{},{},{},{}]\n", pj(&s2_stored), pj(&pk_ntt), pj(&mul), pj(&c),
     );
