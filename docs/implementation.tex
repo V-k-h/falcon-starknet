@@ -483,6 +483,9 @@ key, so no hash input is precomputed off-chain at all. It accepts the real signa
 $7{,}579{,}101$ steps ($611{,}389$ range-check) --- the extra $\sim$2.9\,M steps over
 \texttt{verify\_full} being the SHAKE absorb of the public key --- and its class still fits the
 size cap. That it accepts is itself the proof that the on-chain hpk matches the reference exactly.
+This entrypoint is also deployed on Sepolia (contract
+\texttt{0x03de02703c...ba1bfcd}, class \texttt{0x1df4740e...53d37fc01}) and a read-call returns
+\texttt{true} on the real signature.
 
 \paragraph{Auxiliary costs.}
 \begin{center}
